@@ -69,6 +69,7 @@ def get_graph(**options):
         bonobo.UnpackItems(0),
         #bonobo.PrettyPrinter(),
         #bonobo.Limit(3000),
+        bonobo.CsvWriter("DeckedBuilder-tradelist.csv"),
         bonobo.OrderFields([
             'Card',
             'Set',
@@ -154,6 +155,8 @@ def tradeable(row):
     if (foil_qty > 0):
         yield {
             **row._asdict(),
+            'Reg Qty': 0,
+            'Foil Qty':foil_qty,
             'Quantity': foil_qty,
             'Foil': 1,
         }
@@ -161,6 +164,8 @@ def tradeable(row):
     if (qty > 0 and price > 0):
         yield {
             **row._asdict(),
+            'Reg Qty': qty,
+            'Foil Qty':0,
             'Quantity': qty,
             'Foil': 0,
         }
