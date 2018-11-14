@@ -18,6 +18,18 @@ def get_graph(**options):
         split,
     )
 
+    #Reg Qty,Foil Qty,Name,Set,Acquired,Language
+    echomtg = {
+        "Acquired For": "0.004",
+        "Language": "en",
+    }
+    graph.add_chain(
+        bonobo.Rename(Name='Card', ),
+        bonobo.Format(**echomtg, ),
+        bonobo.CsvWriter("EchoMTG.csv"),
+        _input=split,
+    )
+
     graph.add_chain(
         foils,
         bonobo.CsvWriter("DeckedBuilder-foils.csv"),
@@ -77,6 +89,15 @@ def get_graph(**options):
             'Quantity',
         ]),
         bonobo.CsvWriter("CardKingdom-buylist.csv"),
+        bonobo.OrderFields([
+            'Quantity',
+            'Card',
+            'Set',
+        ]),
+        bonobo.CsvWriter(
+            "mtgprice-buylist.csv",
+            delimiter="\t",
+        ),
         _input=split,
     )
 
@@ -156,7 +177,7 @@ def tradeable(row):
         yield {
             **row._asdict(),
             'Reg Qty': 0,
-            'Foil Qty':foil_qty,
+            'Foil Qty': foil_qty,
             'Quantity': foil_qty,
             'Foil': 1,
         }
@@ -165,7 +186,7 @@ def tradeable(row):
         yield {
             **row._asdict(),
             'Reg Qty': qty,
-            'Foil Qty':0,
+            'Foil Qty': 0,
             'Quantity': qty,
             'Foil': 0,
         }
