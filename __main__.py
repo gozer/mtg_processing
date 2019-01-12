@@ -101,6 +101,13 @@ def get_graph(**options):
         _input=split,
     )
 
+    graph.add_chain(
+        tradeable_decked,
+        bonobo.UnpackItems(0),
+        bonobo.CsvWriter("Deckbox-inventory.csv"),
+        _input=split,
+    )
+
     return graph
 
 
@@ -142,6 +149,102 @@ def more_than_set(row):
         yield {
             **row._asdict(),
             'Reg Qty': qty - 8,
+        }
+
+
+#Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price
+@use_raw_input
+def tradeable_decked(row):
+    qty = int(row.get('Reg Qty'))
+    foil_qty = int(row.get('Foil Qty'))
+    trade_qty = 0
+    trade_foil_qty = 0
+    rarity = row.get('Rarity')
+
+    price_str = row.get('Single Price') or "0"
+    price = float(price_str)
+
+    foil_price_str = row.get('Single Foil Price') or "0"
+    foil_price = float(foil_price_str)
+
+    foil_cutoff = 1
+
+    if rarity == "Rare" or rarity == "Mythic Rare":
+        qty_cutoff = 1
+    else:
+        qty_cutoff = 8
+
+    if qty > qty_cutoff and price > 0.1:
+        trade_qty = qty - qty_cutoff
+        #qty = qty_cutoff
+
+    if foil_qty > foil_cutoff:
+        trade_foil_qty = foil_qty - foil_cutoff
+        #foil_qty = foil_cutoff
+
+    edition = row.get('Set')
+    if edition == "Magic: The Gathering-Conspiracy":
+        edition = "Conspiracy"
+
+    if edition == 'Time Spiral ""Timeshifted""':
+        edition = 'Time Spiral "Timeshifted"'
+
+    if edition == 'Magic: The Gathering-Commander':
+        edition = "Commander"
+
+    if edition == 'Commander 2013 Edition':
+        edition = "Commander 2013"
+
+    if edition == 'Planechase 2012 Edition':
+        edition = 'Planechase 2012'
+
+    name = row.get('Card')
+
+    if name == 'Dimir Guildgate (b)':
+        name = 'Dimir Guildgate'
+
+    if name == 'Sword of Dungeons &amp; Dragons':
+        name = 'Sword of Dungeons & Dragons'
+
+    if name == 'Unholy Fiend':
+        name = 'Cloistered Youth'
+
+    if foil_qty > 0:
+        yield {
+            'Count': foil_qty,
+            'Tradelist Count': trade_foil_qty,
+            'Name': name,
+            'Edition': edition,
+            'Card Number': row.get('Mvid'),
+            'Condition': 'Mint',
+            'Language': 'English',
+            'Foil': 'foil',
+            'Signed': '',
+            'Artist Proof': '',
+            'Altered Art': '',
+            'Misprint': '',
+            'Promo': '',
+            'Textless': '',
+            'My Price': foil_price * 0.9,
+        }
+
+    if qty > 0:
+        yield {
+            'Count': qty,
+            'Tradelist Count': trade_qty,
+            'Name': name,
+            'Edition': edition,
+            'Card Number': row.get('Mvid'),
+            'Condition': 'Mint',
+            'Language': 'English',
+            'Foil': '',
+            'Signed': '',
+            'Artist Proof': '',
+            'Altered Art': '',
+            'Misprint': '',
+            'Promo': '',
+            'Textless': '',
+            'My Price': price * 0.9,
         }
 
 
