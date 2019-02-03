@@ -200,8 +200,8 @@ def tradeable_decked(row):
 
     name = row.get('Card')
 
-    if name == 'Dimir Guildgate (b)':
-        name = 'Dimir Guildgate'
+    import re
+    name = re.sub(" \([ab]\)$", "", name)
 
     if name == 'Sword of Dungeons &amp; Dragons':
         name = 'Sword of Dungeons & Dragons'
