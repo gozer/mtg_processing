@@ -1,4 +1,67 @@
 import bonobo
+from bonobo.config import use, use_context, use_raw_input, use_context_processor
+from bonobo.constants import NOT_MODIFIED
+from os import listdir
+from os.path import isfile, join
+
+NO_SALE = True
+PRICE_MODIFIER = 0.9
+
+IN_USE_CARDS = {}
+import pprint
+
+
+def _used_cards(foo, bar):
+    yield IN_USE_CARDS
+    pprint.pprint(IN_USE_CARDS)
+
+
+@use_context_processor(_used_cards)
+def in_use_cards(_used_cards, count, name, section, edition, *rest):
+    # Scratchpad, we don't care about
+    if section == 'scratchpad':
+        return
+
+    if edition not in _used_cards:
+        _used_cards[edition] = {}
+
+    if name not in _used_cards[edition]:
+        _used_cards[edition][name] = 0
+
+    _used_cards[edition][name] += int(count)
+
+    # pprint.pprint(IN_USE_CARDS)
+
+    return
+
+
+def get_decks(**options):
+    """
+    This function builds the graph that needs to be executed.
+
+    :return: bonobo.Graph
+
+    """
+    graph = bonobo.Graph()
+
+    csv_in = bonobo.noop
+
+    graph.add_chain(
+        csv_in,
+        # bonobo.PrettyPrinter(),
+        in_use_cards,
+        _input=None,
+    )
+
+    for deck in listdir("decks"):
+        deck_path = join("decks", deck)
+        if isfile(deck_path):
+            graph.add_chain(
+                bonobo.CsvReader(deck_path),
+                _output=csv_in,
+            )
+
+    return graph
 
 
 def get_graph(**options):
@@ -11,11 +74,23 @@ def get_graph(**options):
     graph = bonobo.Graph()
 
     split = bonobo.noop
+    csv_in = bonobo.noop
 
     graph.add_chain(
-        bonobo.CsvReader('main.csv'),
+        csv_in,
         bonobo.CsvWriter("DeckedBuilder.csv"),
         split,
+        _input=None,
+    )
+
+    graph.add_chain(
+        bonobo.CsvReader('main-en.csv'),
+        _output=csv_in,
+    )
+
+    graph.add_chain(
+        bonobo.CsvReader('Deckbox-extras.csv'),
+        _output=csv_in,
     )
 
     #Reg Qty,Foil Qty,Name,Set,Acquired,Language
@@ -128,9 +203,6 @@ def get_graph(**options):
 #? Price Source[13] = 'tcglo'
 #? Notes[14] = ''
 
-from bonobo.config import use, use_context, use_raw_input
-from bonobo.constants import NOT_MODIFIED
-
 
 @use_raw_input
 def a_lot(row):
@@ -153,8 +225,14 @@ def more_than_set(row):
 
 
 #Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price
+@use_context_processor(_used_cards)
 @use_raw_input
-def tradeable_decked(row):
+def tradeable_decked(_used_cards, row):
+
+    #pprint.pprint(_used_cards)
+    edition = row.get('Set')
+    name = row.get('Card')
+
     qty = int(row.get('Reg Qty'))
     foil_qty = int(row.get('Foil Qty'))
     trade_qty = 0
@@ -174,6 +252,14 @@ def tradeable_decked(row):
     else:
         qty_cutoff = 8
 
+    # Are we using this card in our built decks ?
+    if edition in _used_cards:
+        if name in _used_cards[edition]:
+            deck_qty = _used_cards[edition][name]
+            if deck_qty > qty_cutoff:
+                qty_cutoff = deck_qty
+            #qty_cutoff += deck_qty
+
     if qty > qty_cutoff and price > 0.1:
         trade_qty = qty - qty_cutoff
         #qty = qty_cutoff
@@ -182,7 +268,6 @@ def tradeable_decked(row):
         trade_foil_qty = foil_qty - foil_cutoff
         #foil_qty = foil_cutoff
 
-    edition = row.get('Set')
     if edition == "Magic: The Gathering-Conspiracy":
         edition = "Conspiracy"
 
@@ -198,8 +283,6 @@ def tradeable_decked(row):
     if edition == 'Planechase 2012 Edition':
         edition = 'Planechase 2012'
 
-    name = row.get('Card')
-
     import re
     name = re.sub(" \([ab]\)$", "", name)
 
@@ -208,6 +291,11 @@ def tradeable_decked(row):
 
     if name == 'Unholy Fiend':
         name = 'Cloistered Youth'
+
+    # Dont sell yet
+    if NO_SALE:
+        price = 0
+        foil_price = 0
 
     if foil_qty > 0:
         yield {
@@ -225,7 +313,7 @@ def tradeable_decked(row):
             'Misprint': '',
             'Promo': '',
             'Textless': '',
-            'My Price': foil_price * 0.9,
+            'My Price': foil_price * PRICE_MODIFIER,
         }
 
     if qty > 0:
@@ -244,7 +332,7 @@ def tradeable_decked(row):
             'Misprint': '',
             'Promo': '',
             'Textless': '',
-            'My Price': price * 0.9,
+            'My Price': price * PRICE_MODIFIER,
         }
 
 
@@ -344,4 +432,6 @@ def get_services(**options):
 if __name__ == '__main__':
     parser = bonobo.get_argument_parser()
     with bonobo.parse_args(parser) as options:
+        bonobo.run(get_decks(**options), services=get_services(**options))
+
         bonobo.run(get_graph(**options), services=get_services(**options))
