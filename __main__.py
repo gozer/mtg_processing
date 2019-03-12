@@ -3,17 +3,24 @@ from bonobo.config import use, use_context, use_raw_input, use_context_processor
 from bonobo.constants import NOT_MODIFIED
 from os import listdir
 from os.path import isfile, join
+import requests
 
-NO_SALE = True
-PRICE_MODIFIER = 0.9
+STANDARD_URL = "https://mtgjson.com/json/Standard.json"
 
+NO_SALE = False
+CUTOFF = 8
+PRICE_MODIFIER = 0.95
+MIN_PRICE = 0.25
 IN_USE_CARDS = {}
-import pprint
+STANDARD_CARDS = {}
 
 
 def _used_cards(foo, bar):
     yield IN_USE_CARDS
-    pprint.pprint(IN_USE_CARDS)
+
+
+def _standard_cards(foo, bar):
+    yield STANDARD_CARDS
 
 
 @use_context_processor(_used_cards)
@@ -33,6 +40,21 @@ def in_use_cards(_used_cards, count, name, section, edition, *rest):
     # pprint.pprint(IN_USE_CARDS)
 
     return
+
+
+@use_context_processor(_standard_cards)
+def standard_cards(_standard_cards):
+    for set, cards in requests.get(STANDARD_URL).json().items():
+        for card in cards['cards']:
+            _standard_cards[card['name']] = True
+            yield card['name']
+
+
+def get_standard_cards(**options):
+    graph = bonobo.Graph()
+    graph.add_chain(standard_cards, )
+
+    return graph
 
 
 def get_decks(**options):
@@ -55,6 +77,10 @@ def get_decks(**options):
 
     for deck in listdir("decks"):
         deck_path = join("decks", deck)
+        print("XXX: %s" % deck)
+        if deck == ".gitignore":
+            continue
+
         if isfile(deck_path):
             graph.add_chain(
                 bonobo.CsvReader(deck_path),
@@ -217,10 +243,10 @@ def more_than_set(row):
 
     qty = int(row.get('Reg Qty'))
 
-    if qty > 8:
+    if qty > CUTOFF:
         yield {
             **row._asdict(),
-            'Reg Qty': qty - 8,
+            'Reg Qty': qty - CUTOFF,
         }
 
 
@@ -232,6 +258,8 @@ def tradeable_decked(_used_cards, row):
     #pprint.pprint(_used_cards)
     edition = row.get('Set')
     name = row.get('Card')
+
+    standard = name in STANDARD_CARDS
 
     qty = int(row.get('Reg Qty'))
     foil_qty = int(row.get('Foil Qty'))
@@ -250,7 +278,7 @@ def tradeable_decked(_used_cards, row):
     if rarity == "Rare" or rarity == "Mythic Rare":
         qty_cutoff = 1
     else:
-        qty_cutoff = 8
+        qty_cutoff = CUTOFF
 
     # Are we using this card in our built decks ?
     if edition in _used_cards:
@@ -260,13 +288,17 @@ def tradeable_decked(_used_cards, row):
                 qty_cutoff = deck_qty
             #qty_cutoff += deck_qty
 
-    if qty > qty_cutoff and price > 0.1:
+    if standard:
+        if qty_cutoff < 4:
+            qty_cutoff = 4
+        if foil_cutoff < 4:
+            foil_cutoff = 4
+
+    if qty > qty_cutoff:
         trade_qty = qty - qty_cutoff
-        #qty = qty_cutoff
 
     if foil_qty > foil_cutoff:
         trade_foil_qty = foil_qty - foil_cutoff
-        #foil_qty = foil_cutoff
 
     if edition == "Magic: The Gathering-Conspiracy":
         edition = "Conspiracy"
@@ -313,10 +345,16 @@ def tradeable_decked(_used_cards, row):
             'Misprint': '',
             'Promo': '',
             'Textless': '',
-            'My Price': foil_price * PRICE_MODIFIER,
+            'My Price': format(foil_price * PRICE_MODIFIER, '.2f'),
         }
 
     if qty > 0:
+        # Don't price below MIN_PRICE
+        price = price * PRICE_MODIFIER
+
+        if price < MIN_PRICE and not NO_SALE:
+            price = MIN_PRICE
+
         yield {
             'Count': qty,
             'Tradelist Count': trade_qty,
@@ -332,7 +370,7 @@ def tradeable_decked(_used_cards, row):
             'Misprint': '',
             'Promo': '',
             'Textless': '',
-            'My Price': price * PRICE_MODIFIER,
+            'My Price': format(price, '.2f'),
         }
 
 
@@ -349,7 +387,7 @@ def tradeable(row):
     if rarity == "Rare" or rarity == "Mythic Rare":
         qty_cutoff = 1
     else:
-        qty_cutoff = 8
+        qty_cutoff = CUTOFF
 
     if qty > qty_cutoff:
         qty -= qty_cutoff
@@ -425,13 +463,17 @@ def get_services(**options):
 
     :return: dict
     """
-    return {}
+    return {
+        'http': requests.Session(),
+    }
 
 
 # The __main__ block actually execute the graph.
 if __name__ == '__main__':
     parser = bonobo.get_argument_parser()
     with bonobo.parse_args(parser) as options:
+        bonobo.run(
+            get_standard_cards(**options), services=get_services(**options))
         bonobo.run(get_decks(**options), services=get_services(**options))
 
         bonobo.run(get_graph(**options), services=get_services(**options))
