@@ -5,22 +5,36 @@ from os import listdir
 from os.path import isfile, join
 import requests
 
-STANDARD_URL = "https://mtgjson.com/json/Standard.json"
+import logging
+import mondrian
+
+# One line setup (excepthook=True tells mondrian to handle uncaught exceptions)
+mondrian.setup(excepthook=True)
+
+# Use logging, as usual.
+logger = logging.getLogger("mtg")
+logger.setLevel(logging.INFO)
+
+import requests_cache
+requests_cache.install_cache(
+    'scryfall', backend='sqlite', expire_after=60 * 60 * 24 * 7)
+
+from mtgtools.MtgDB import MtgDB
+
+MTG_DB = MtgDB('mtgdb.fs')
 
 NO_SALE = False
-CUTOFF = 8
+CUTOFF = 4
 PRICE_MODIFIER = 0.95
 MIN_PRICE = 0.25
 IN_USE_CARDS = {}
-STANDARD_CARDS = {}
+DEBUG = False
+QUALITY = 'Near Mint'
+LANGUAGE = 'English'
 
 
 def _used_cards(foo, bar):
     yield IN_USE_CARDS
-
-
-def _standard_cards(foo, bar):
-    yield STANDARD_CARDS
 
 
 @use_context_processor(_used_cards)
@@ -42,21 +56,6 @@ def in_use_cards(_used_cards, count, name, section, edition, *rest):
     return
 
 
-@use_context_processor(_standard_cards)
-def standard_cards(_standard_cards):
-    for set, cards in requests.get(STANDARD_URL).json().items():
-        for card in cards['cards']:
-            _standard_cards[card['name']] = True
-            yield card['name']
-
-
-def get_standard_cards(**options):
-    graph = bonobo.Graph()
-    graph.add_chain(standard_cards, )
-
-    return graph
-
-
 def get_decks(**options):
     """
     This function builds the graph that needs to be executed.
@@ -70,14 +69,12 @@ def get_decks(**options):
 
     graph.add_chain(
         csv_in,
-        # bonobo.PrettyPrinter(),
         in_use_cards,
         _input=None,
     )
 
     for deck in listdir("decks"):
         deck_path = join("decks", deck)
-        print("XXX: %s" % deck)
         if deck == ".gitignore":
             continue
 
@@ -203,6 +200,8 @@ def get_graph(**options):
     )
 
     graph.add_chain(
+        metadata,
+        bonobo.UnpackItems(0),
         tradeable_decked,
         bonobo.UnpackItems(0),
         bonobo.CsvWriter("Deckbox-inventory.csv"),
@@ -212,22 +211,75 @@ def get_graph(**options):
     return graph
 
 
-#?
-#? Total Qty[0] = '1'
-#? Reg Qty[1] = '1'
-#? Foil Qty[2] = '0'
-#? Card[3] = 'Aggressive Mammoth'
-#? Set[4] = 'Core Set 2019'
-#? Mana Cost[5] = '3GGG'
-#? Card Type[6] = 'Creature  - Elephant'
-#? Color[7] = 'Green'
-#? Rarity[8] = 'Rare'
-#? Mvid[9] = '450249'
-#? Single Price[10] = '2.00'
-#? Single Foil Price[11] = '0.00'
-#? Total Price[12] = '2.00'
-#? Price Source[13] = 'tcglo'
-#? Notes[14] = ''
+@use('http')
+@use_raw_input
+def metadata(card, *, http):
+    mvid = int(card.get('Mvid') or "-1")
+
+    scryfall = {}
+    mtgio = {}
+
+    if mvid > 0:
+        try:
+            mtgio = MTG_DB.root.mtgio_cards.where_exactly(multiverse_id=mvid)
+
+            if len(mtgio) > 0:
+                mtgio = mtgio[0]
+                logger.debug("Found MTGIO info %r" % mtgio)
+            else:
+                mtgio = None
+
+            if mtgio:
+                scryfall = MTG_DB.root.scryfall_cards.where_exactly(
+                    collector_number=mtgio.number, set_name=mtgio.set_name)
+                scryfall = scryfall[0]
+            else:
+                name = card.get('Card')
+                set_name = card.get('Set')
+                logger.info("Had to search scryfall for name/set %s/%s mvid:%s"
+                            % (name, set_name, mvid))
+                scryfall = MTG_DB.root.scryfall_cards.where_exactly(
+                    name=name, set_name=set_name)
+                if len(scryfall) > 0:
+                    scryfall = scryfall[0]
+                else:
+                    scryfall = None
+
+            if mtgio:
+                real_mvid = mtgio.multiverse_id
+                if real_mvid != mvid:
+                    logger.warn("Mismatching Multiverse ID %s vs %s" %
+                                (mvid, real_mvid))
+                    mvid = real_mvid
+
+        except Exception as e:
+            logger.error("Looking up %r failed: Exception was %r" %
+                         (card.get('Card'), e))
+            scryfall['error'] = e
+
+    else:
+        name = card.get('Card')
+        set_name = card.get('Set')
+
+        scryfall = MTG_DB.root.scryfall_cards.where_exactly(
+            name=name, set_name=set_name)
+        if len(scryfall) >= 1:
+            scryfall = scryfall[0]
+        else:
+            scryfall = None
+
+        mtgio = MTG_DB.root.mtgio_cards.where_exactly(
+            name=name, set_name=set_name)
+        if len(mtgio) >= 1:
+            mtgio = mtgio[0]
+        else:
+            mtgio = None
+
+    yield {
+        **card._asdict(),
+        'scryfall': scryfall,
+        'mtgio': mtgio,
+    }
 
 
 @use_raw_input
@@ -236,6 +288,18 @@ def a_lot(row):
 
     if qty > 16:
         return NOT_MODIFIED
+
+
+def is_standard(card):
+    scryfall = card.get('scryfall')
+    if scryfall:
+        legality = scryfall.legalities
+        if legality:
+            standard = legality.get('standard')
+            if standard == 'legal':
+                return True
+
+    return False
 
 
 @use_raw_input
@@ -259,7 +323,8 @@ def tradeable_decked(_used_cards, row):
     edition = row.get('Set')
     name = row.get('Card')
 
-    standard = name in STANDARD_CARDS
+    #XXX: Check here
+    standard = is_standard(row)
 
     qty = int(row.get('Reg Qty'))
     foil_qty = int(row.get('Foil Qty'))
@@ -300,6 +365,17 @@ def tradeable_decked(_used_cards, row):
     if foil_qty > foil_cutoff:
         trade_foil_qty = foil_qty - foil_cutoff
 
+    scryfall = row.get('scryfall')
+    if scryfall:
+        scryfall_set_name = scryfall.set_name
+        scryfall_set = scryfall.set
+
+        if scryfall_set_name != None:
+            if edition != scryfall_set_name:
+                print("XXX Set %s vs %s" % (edition, scryfall_set_name))
+
+    # edition = scryfall_set_name
+
     if edition == "Magic: The Gathering-Conspiracy":
         edition = "Conspiracy"
 
@@ -324,6 +400,18 @@ def tradeable_decked(_used_cards, row):
     if name == 'Unholy Fiend':
         name = 'Cloistered Youth'
 
+    collector_number = 0
+    scryfall = row.get('scryfall')
+    mtgio = row.get('mtgio')
+
+    if scryfall:
+        collector_number = scryfall.collector_number
+
+    if mtgio:
+        if collector_number:
+            if collector_number != mtgio.number:
+                logger.error("Collector number mismatch!!")
+
     # Dont sell yet
     if NO_SALE:
         price = 0
@@ -335,9 +423,9 @@ def tradeable_decked(_used_cards, row):
             'Tradelist Count': trade_foil_qty,
             'Name': name,
             'Edition': edition,
-            'Card Number': row.get('Mvid'),
-            'Condition': 'Mint',
-            'Language': 'English',
+            'Card Number': collector_number,
+            'Condition': QUALITY,
+            'Language': LANGUAGE,
             'Foil': 'foil',
             'Signed': '',
             'Artist Proof': '',
@@ -360,9 +448,9 @@ def tradeable_decked(_used_cards, row):
             'Tradelist Count': trade_qty,
             'Name': name,
             'Edition': edition,
-            'Card Number': row.get('Mvid'),
-            'Condition': 'Mint',
-            'Language': 'English',
+            'Card Number': collector_number,
+            'Condition': QUALITY,
+            'Language': LANGUAGE,
             'Foil': '',
             'Signed': '',
             'Artist Proof': '',
@@ -463,17 +551,25 @@ def get_services(**options):
 
     :return: dict
     """
+
+    #mtg_db.mtgio_update()
+
     return {
         'http': requests.Session(),
+        'mtgdb': MTG_DB,
     }
 
 
 # The __main__ block actually execute the graph.
 if __name__ == '__main__':
     parser = bonobo.get_argument_parser()
-    with bonobo.parse_args(parser) as options:
-        bonobo.run(
-            get_standard_cards(**options), services=get_services(**options))
-        bonobo.run(get_decks(**options), services=get_services(**options))
 
+    parser.add_argument('--update', action='store_true', default=False)
+
+    with bonobo.parse_args(parser) as options:
+        if options['update']:
+            MTG_DB.scryfall_update()
+            MTG_DB.mtgio_update()
+
+        bonobo.run(get_decks(**options), services=get_services(**options))
         bonobo.run(get_graph(**options), services=get_services(**options))
