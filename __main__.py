@@ -216,12 +216,14 @@ def get_graph(**options):
 def metadata(card, *, http):
     mvid = int(card.get('Mvid') or "-1")
 
-    scryfall = {}
-    mtgio = {}
+    scryfall = None
+    mtgio = None
 
     if mvid > 0:
         try:
             mtgio = MTG_DB.root.mtgio_cards.where_exactly(multiverse_id=mvid)
+            scryfall = MTG_DB.root.scryfall_cards.where_exactly(
+                multiverse_ids=[mvid])
 
             if len(mtgio) > 0:
                 mtgio = mtgio[0]
@@ -229,17 +231,20 @@ def metadata(card, *, http):
             else:
                 mtgio = None
 
-            if mtgio:
-                scryfall = MTG_DB.root.scryfall_cards.where_exactly(
-                    collector_number=mtgio.number, set_name=mtgio.set_name)
+            if len(scryfall) > 0:
                 scryfall = scryfall[0]
+                logger.debug("Found Scryfall info %r" % scryfall)
             else:
+                scryfall = None
+
+            if not scryfall:
                 name = card.get('Card')
                 set_name = card.get('Set')
                 logger.info("Had to search scryfall for name/set %s/%s mvid:%s"
                             % (name, set_name, mvid))
                 scryfall = MTG_DB.root.scryfall_cards.where_exactly(
                     name=name, set_name=set_name)
+
                 if len(scryfall) > 0:
                     scryfall = scryfall[0]
                 else:
@@ -267,13 +272,6 @@ def metadata(card, *, http):
             scryfall = scryfall[0]
         else:
             scryfall = None
-
-        mtgio = MTG_DB.root.mtgio_cards.where_exactly(
-            name=name, set_name=set_name)
-        if len(mtgio) >= 1:
-            mtgio = mtgio[0]
-        else:
-            mtgio = None
 
     yield {
         **card._asdict(),
@@ -338,6 +336,18 @@ def tradeable_decked(_used_cards, row):
     foil_price_str = row.get('Single Foil Price') or "0"
     foil_price = float(foil_price_str)
 
+    scryfall = row.get('scryfall')
+
+    if scryfall:
+        # XXX: Check for foil somehow...
+        if scryfall.prices['usd']:
+            price = float(scryfall.prices['usd'])
+        if scryfall.prices['usd_foil']:
+            foil_price = float(scryfall.prices['usd_foil'])
+
+        logger.debug("Prices from Scryfall for %s are %s/%s" % (name, price,
+                                                                foil_price))
+
     foil_cutoff = 1
 
     if rarity == "Rare" or rarity == "Mythic Rare":
@@ -365,14 +375,13 @@ def tradeable_decked(_used_cards, row):
     if foil_qty > foil_cutoff:
         trade_foil_qty = foil_qty - foil_cutoff
 
-    scryfall = row.get('scryfall')
     if scryfall:
         scryfall_set_name = scryfall.set_name
         scryfall_set = scryfall.set
 
         if scryfall_set_name != None:
             if edition != scryfall_set_name:
-                print("XXX Set %s vs %s" % (edition, scryfall_set_name))
+                logger.debug("XXX Set %s vs %s" % (edition, scryfall_set_name))
 
     # edition = scryfall_set_name
 
