@@ -23,7 +23,7 @@ from mtgtools.MtgDB import MtgDB
 
 MTG_DB = MtgDB('mtgdb.fs')
 
-NO_SALE = False
+NO_SALE = True
 CUTOFF = 4
 PRICE_MODIFIER = 0.95
 MIN_PRICE = 0.25
@@ -337,9 +337,9 @@ def tradeable_decked(_used_cards, row):
     foil_price = float(foil_price_str)
 
     scryfall = row.get('scryfall')
+    mtgio = row.get('mtgio')
 
-    if scryfall:
-        # XXX: Check for foil somehow...
+    if scryfall and not NO_SALE:
         if scryfall.prices['usd']:
             price = float(scryfall.prices['usd'])
         if scryfall.prices['usd_foil']:
@@ -410,16 +410,10 @@ def tradeable_decked(_used_cards, row):
         name = 'Cloistered Youth'
 
     collector_number = 0
-    scryfall = row.get('scryfall')
-    mtgio = row.get('mtgio')
-
     if scryfall:
         collector_number = scryfall.collector_number
-
-    if mtgio:
-        if collector_number:
-            if collector_number != mtgio.number:
-                logger.error("Collector number mismatch!!")
+    elif mtgio:
+        collector_number = mtgio.number
 
     # Dont sell yet
     if NO_SALE:
