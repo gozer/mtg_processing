@@ -20,6 +20,10 @@ requests_cache.install_cache(
     'scryfall', backend='sqlite', expire_after=60 * 60 * 24 * 7)
 
 from mtgtools.MtgDB import MtgDB
+from mtgsdk import Card, Set
+#import scrython
+#from scryfall_cache import ScryfallCache
+#cache = ScryfallCache(application="scryfall_tests")
 
 MTG_DB = MtgDB('mtgdb.fs')
 
@@ -214,69 +218,66 @@ def get_graph(**options):
 @use('http')
 @use_raw_input
 def metadata(card, *, http):
-    mvid = int(card.get('Mvid') or "-1")
+    mvid = card.get('Mvid')
 
     scryfall = None
-    mtgio = None
 
-    if mvid > 0:
+    if mvid:
         try:
-            mtgio = MTG_DB.root.mtgio_cards.where_exactly(multiverse_id=mvid)
-            scryfall = MTG_DB.root.scryfall_cards.where_exactly(
-                multiverse_ids=[mvid])
-
-            if len(mtgio) > 0:
-                mtgio = mtgio[0]
-                logger.debug("Found MTGIO info %r" % mtgio)
+            response = requests.get(
+                "https://api.scryfall.com/cards/multiverse/%s" % mvid).json()
+            if response.get("object") == "card":
+                scryfall = response
             else:
-                mtgio = None
-
-            if len(scryfall) > 0:
-                scryfall = scryfall[0]
-                logger.debug("Found Scryfall info %r" % scryfall)
-            else:
-                scryfall = None
-
-            if not scryfall:
-                name = card.get('Card')
-                set_name = card.get('Set')
-                logger.info("Had to search scryfall for name/set %s/%s mvid:%s"
-                            % (name, set_name, mvid))
-                scryfall = MTG_DB.root.scryfall_cards.where_exactly(
-                    name=name, set_name=set_name)
-
-                if len(scryfall) > 0:
-                    scryfall = scryfall[0]
-                else:
-                    scryfall = None
-
-            if mtgio:
-                real_mvid = mtgio.multiverse_id
-                if real_mvid != mvid:
-                    logger.warn("Mismatching Multiverse ID %s vs %s" %
-                                (mvid, real_mvid))
-                    mvid = real_mvid
-
+                logger.warn("[mvid:%s] Invalid scyfall response %r" %
+                            (mvid, response.get('details')))
         except Exception as e:
-            logger.error("Looking up %r failed: Exception was %r" %
+            logger.error("[scryfall] Looking up %r failed: Exception was %r" %
                          (card.get('Card'), e))
-            scryfall['error'] = e
+    if not scryfall:
 
-    else:
         name = card.get('Card')
         set_name = card.get('Set')
 
-        scryfall = MTG_DB.root.scryfall_cards.where_exactly(
-            name=name, set_name=set_name)
-        if len(scryfall) >= 1:
-            scryfall = scryfall[0]
-        else:
-            scryfall = None
+        logger.error("[mvid:%s] lookup failed, falling back %s [%s]" %
+                     (mvid, name, set_name))
 
+        set = list(
+            filter(lambda x: x.type != "promo",
+                   Set.where(name=set_name).all()))
+
+        cards = []
+        if len(set) == 1:
+            set_code = set[0].code
+            logger.debug("Set code is %s" % set_code)
+            cards = Card.where(name=name).where(set=set_code).all()
+
+        logger.debug("Found %d cards" % len(cards))
+
+        if len(cards) == 1:
+            mvid = cards[0].multiverse_id
+            logger.warning("[mvid:%s] Found on magicthegathering.io" % mvid)
+            # XXX: Duplication!
+
+            try:
+                response = requests.get(
+                    "https://api.scryfall.com/cards/multiverse/%s" %
+                    mvid).json()
+                if response.get("object") == "card":
+                    scryfall = response
+                else:
+                    logger.warn("[mvid:%s] Invalid scyfall response %r" %
+                                (mvid, response.get('details')))
+            except Exception as e:
+                logger.error(
+                    "[scryfall] Looking up %r failed: Exception was %r" %
+                    (card.get('Card'), e))
+
+    #XXX: What to do with Scryfall-less cards...
     yield {
         **card._asdict(),
+        'mvid': mvid,
         'scryfall': scryfall,
-        'mtgio': mtgio,
     }
 
 
@@ -291,9 +292,9 @@ def a_lot(row):
 def is_standard(card):
     scryfall = card.get('scryfall')
     if scryfall:
-        legality = scryfall.legalities
+        legality = scryfall.get('legalities', None)
         if legality:
-            standard = legality.get('standard')
+            standard = legality.get('standard', None)
             if standard == 'legal':
                 return True
 
@@ -339,11 +340,12 @@ def tradeable_decked(_used_cards, row):
     scryfall = row.get('scryfall')
     mtgio = row.get('mtgio')
 
-    if scryfall and not NO_SALE:
-        if scryfall.prices['usd']:
-            price = float(scryfall.prices['usd'])
-        if scryfall.prices['usd_foil']:
-            foil_price = float(scryfall.prices['usd_foil'])
+    if scryfall and 'prices' in scryfall:
+        # XXX: Check for foil somehow...
+        if scryfall['prices']['usd']:
+            price = float(scryfall['prices']['usd'])
+        if scryfall['prices']['usd_foil']:
+            foil_price = float(scryfall['prices']['usd_foil'])
 
         logger.debug("Prices from Scryfall for %s are %s/%s" % (name, price,
                                                                 foil_price))
@@ -376,8 +378,10 @@ def tradeable_decked(_used_cards, row):
         trade_foil_qty = foil_qty - foil_cutoff
 
     if scryfall:
-        scryfall_set_name = scryfall.set_name
-        scryfall_set = scryfall.set
+        if not 'set_name' in scryfall:
+            logger.error("MIssing set_name from scryfall %r" % scryfall)
+        scryfall_set_name = scryfall['set_name']
+        scryfall_set = scryfall['set']
 
         if scryfall_set_name != None:
             if edition != scryfall_set_name:
@@ -411,9 +415,7 @@ def tradeable_decked(_used_cards, row):
 
     collector_number = 0
     if scryfall:
-        collector_number = scryfall.collector_number
-    elif mtgio:
-        collector_number = mtgio.number
+        collector_number = scryfall['collector_number']
 
     # Dont sell yet
     if NO_SALE:
