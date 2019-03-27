@@ -28,7 +28,7 @@ from mtgsdk import Card, Set
 MTG_DB = MtgDB('mtgdb.fs')
 
 NO_SALE = True
-CUTOFF = 4
+CUTOFF = 8
 PRICE_MODIFIER = 0.95
 MIN_PRICE = 0.25
 IN_USE_CARDS = {}
@@ -239,24 +239,33 @@ def metadata(card, *, http):
         name = card.get('Card')
         set_name = card.get('Set')
 
-        logger.error("[mvid:%s] lookup failed, falling back %s [%s]" %
+        logger.debug("[mvid:%s] lookup failed, falling back %s [%s]" %
                      (mvid, name, set_name))
 
         set = list(
-            filter(lambda x: x.type != "promo",
-                   Set.where(name=set_name).all()))
+            filter(
+                lambda x: x['name'] == set_name,
+                requests.get("https://api.scryfall.com/sets").json().get(
+                    'data')))
 
         cards = []
         if len(set) == 1:
-            set_code = set[0].code
+            set_code = set[0]['code']
             logger.debug("Set code is %s" % set_code)
-            cards = Card.where(name=name).where(set=set_code).all()
+            params = {
+                'q': "set:%s name:\"%s\"" % (set_code, name),
+            }
+            cards = requests.get(
+                "https://api.scryfall.com/cards/search",
+                params=params).json().get("data", [])
+            #cards = Card.where(name=name).where(set=set_code).all()
+            #
 
-        logger.debug("Found %d cards" % len(cards))
+        #logger.debug("Found %d cards" % len(cards))
 
         if len(cards) == 1:
-            mvid = cards[0].multiverse_id
-            logger.warning("[mvid:%s] Found on magicthegathering.io" % mvid)
+            mvid = cards[0]['multiverse_ids'][0]
+
             # XXX: Duplication!
 
             try:
@@ -265,6 +274,8 @@ def metadata(card, *, http):
                     mvid).json()
                 if response.get("object") == "card":
                     scryfall = response
+                    logger.warning("[mvid:%s] Found on scryfall: %s [%s]" %
+                                   (mvid, name, set_name))
                 else:
                     logger.warn("[mvid:%s] Invalid scyfall response %r" %
                                 (mvid, response.get('details')))
