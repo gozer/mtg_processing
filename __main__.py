@@ -229,8 +229,8 @@ def metadata(card, *, http):
             if response.get("object") == "card":
                 scryfall = response
             else:
-                logger.warn("[mvid:%s] Invalid scyfall response %r" %
-                            (mvid, response.get('details')))
+                logger.debug("[mvid:%s] Invalid scyfall response %r" %
+                             (mvid, response.get('details')))
         except Exception as e:
             logger.error("[scryfall] Looking up %r failed: Exception was %r" %
                          (card.get('Card'), e))
@@ -258,31 +258,10 @@ def metadata(card, *, http):
             cards = requests.get(
                 "https://api.scryfall.com/cards/search",
                 params=params).json().get("data", [])
-            #cards = Card.where(name=name).where(set=set_code).all()
-            #
-
-        #logger.debug("Found %d cards" % len(cards))
 
         if len(cards) == 1:
-            mvid = cards[0]['multiverse_ids'][0]
-
-            # XXX: Duplication!
-
-            try:
-                response = requests.get(
-                    "https://api.scryfall.com/cards/multiverse/%s" %
-                    mvid).json()
-                if response.get("object") == "card":
-                    scryfall = response
-                    logger.warning("[mvid:%s] Found on scryfall: %s [%s]" %
-                                   (mvid, name, set_name))
-                else:
-                    logger.warn("[mvid:%s] Invalid scyfall response %r" %
-                                (mvid, response.get('details')))
-            except Exception as e:
-                logger.error(
-                    "[scryfall] Looking up %r failed: Exception was %r" %
-                    (card.get('Card'), e))
+            scryfall = cards[0]
+            mvid = scryfall['multiverse_ids'][0]
 
     #XXX: What to do with Scryfall-less cards...
     yield {
