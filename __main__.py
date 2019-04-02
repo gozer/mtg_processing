@@ -101,23 +101,25 @@ def get_graph(**options):
     graph = bonobo.Graph()
 
     split = bonobo.noop
-    csv_in = bonobo.noop
 
     graph.add_chain(
-        csv_in,
         bonobo.CsvWriter("DeckedBuilder.csv"),
+        #bonobo.Limit(10),
+        metadata,
+        #bonobo.UnpackItems(0),
         split,
         _input=None,
+        _name="main",
     )
 
     graph.add_chain(
         bonobo.CsvReader('main-en.csv'),
-        _output=csv_in,
+        _output="main",
     )
 
     graph.add_chain(
         bonobo.CsvReader('Deckbox-extras.csv'),
-        _output=csv_in,
+        _output="main",
     )
 
     #Reg Qty,Foil Qty,Name,Set,Acquired,Language
@@ -126,34 +128,21 @@ def get_graph(**options):
         "Language": "en",
     }
     graph.add_chain(
+        # echomtg specific fiddling
+        remove_metadata,
+        bonobo.UnpackItems(0),
+        #bonobo.PrettyPrinter(),
         bonobo.Rename(Name='Card', ),
         bonobo.Format(**echomtg, ),
         bonobo.CsvWriter("EchoMTG.csv"),
         _input=split,
     )
 
-    graph.add_chain(
-        foils,
-        bonobo.CsvWriter("DeckedBuilder-foils.csv"),
-        _input=split,
-    )
-
-    graph.add_chain(
-        not_foils,
-        rares,
-        bonobo.CsvWriter("DeckedBuilder-rares.csv"),
-        _input=split,
-    )
-
-    graph.add_chain(
-        not_foils,
-        not_rares,
-        bonobo.CsvWriter(path="DeckedBuilder-commons.csv"),
-        _input=split,
-    )
-
     # MTG Studio
     graph.add_chain(
+        mtg_studio,
+        remove_metadata,
+        bonobo.UnpackItems(0),
         bonobo.Rename(
             Name='Card',
             Edition='Set',
@@ -164,48 +153,34 @@ def get_graph(**options):
         _input=split,
     )
 
+    #    graph.add_chain(
+    #        tradeable,
+    #        bonobo.UnpackItems(0),
+    #        #bonobo.PrettyPrinter(),
+    #        #bonobo.Limit(3000),
+    #        bonobo.CsvWriter("DeckedBuilder-tradelist.csv"),
+    #        bonobo.OrderFields([
+    #            'Card',
+    #            'Set',
+    #            'Foil',
+    #            'Quantity',
+    #        ]),
+    #        bonobo.CsvWriter("CardKingdom-buylist.csv"),
+    #        bonobo.OrderFields([
+    #            'Quantity',
+    #            'Card',
+    #            'Set',
+    #        ]),
+    #        bonobo.CsvWriter(
+    #            "mtgprice-buylist.csv",
+    #            delimiter="\t",
+    #        ),
+    #        _input=split,
+    #    )
+    #
     graph.add_chain(
-        not_foils,
-        not_rares,
-        a_lot,
-        bonobo.OrderFields([
-            'Card',
-            'Set',
-            'Foil Qty',
-            'Reg Qty',
-        ]),
-        bonobo.CsvWriter("bulk.csv"),
-        _input=split,
-    )
-
-    graph.add_chain(
-        tradeable,
-        bonobo.UnpackItems(0),
-        #bonobo.PrettyPrinter(),
-        #bonobo.Limit(3000),
-        bonobo.CsvWriter("DeckedBuilder-tradelist.csv"),
-        bonobo.OrderFields([
-            'Card',
-            'Set',
-            'Foil',
-            'Quantity',
-        ]),
-        bonobo.CsvWriter("CardKingdom-buylist.csv"),
-        bonobo.OrderFields([
-            'Quantity',
-            'Card',
-            'Set',
-        ]),
-        bonobo.CsvWriter(
-            "mtgprice-buylist.csv",
-            delimiter="\t",
-        ),
-        _input=split,
-    )
-
-    graph.add_chain(
-        metadata,
-        bonobo.UnpackItems(0),
+        #       # metadata,
+        #        #bonobo.UnpackItems(0),
         tradeable_decked,
         bonobo.UnpackItems(0),
         bonobo.CsvWriter("Deckbox-inventory.csv"),
@@ -215,10 +190,20 @@ def get_graph(**options):
     return graph
 
 
+def remove_metadata(card):
+    if 'scryfall' in card:
+        out_card = {**card}
+        out_card.pop('scryfall')
+        yield out_card
+    else:
+        yield NOT_MODIFIED
+
+
 @use('http')
 @use_raw_input
 def metadata(card, *, http):
     mvid = card.get('Mvid')
+    name = card.get('Card')
 
     scryfall = None
 
@@ -232,11 +217,9 @@ def metadata(card, *, http):
                 logger.debug("[mvid:%s] Invalid scyfall response %r" %
                              (mvid, response.get('details')))
         except Exception as e:
-            logger.error("[scryfall] Looking up %r failed: Exception was %r" %
+            logger.debug("[scryfall] Looking up %r failed: Exception was %r" %
                          (card.get('Card'), e))
     if not scryfall:
-
-        name = card.get('Card')
         set_name = card.get('Set')
 
         logger.debug("[mvid:%s] lookup failed, falling back %s [%s]" %
@@ -264,9 +247,23 @@ def metadata(card, *, http):
             mvid = scryfall['multiverse_ids'][0]
 
     #XXX: What to do with Scryfall-less cards...
+
+    if scryfall and scryfall['name'] and scryfall['name'] != name:
+        layout = scryfall['layout']
+        if layout == "normal":
+            logger.debug("Name mismatch %s vs %s for layout %s" %
+                         (name, scryfall['name'], layout))
+            name = scryfall['name']
+
+    if scryfall and scryfall['reserved']:
+        logger.warning("Reserved card: %s [%s]: %.2f$" %
+                       (scryfall['name'], scryfall['set_name'],
+                        float(scryfall['prices']['usd'])))
+
     yield {
         **card._asdict(),
-        'mvid': mvid,
+        'Card': name,
+        'Mvid': mvid,
         'scryfall': scryfall,
     }
 
@@ -305,7 +302,6 @@ def more_than_set(row):
 
 #Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price
 @use_context_processor(_used_cards)
-@use_raw_input
 def tradeable_decked(_used_cards, row):
 
     #pprint.pprint(_used_cards)
@@ -328,7 +324,7 @@ def tradeable_decked(_used_cards, row):
     foil_price = float(foil_price_str)
 
     scryfall = row.get('scryfall')
-    mtgio = row.get('mtgio')
+    #mtgio = row.get('mtgio')
 
     if scryfall and 'prices' in scryfall:
         # XXX: Check for foil somehow...
@@ -337,8 +333,11 @@ def tradeable_decked(_used_cards, row):
         if scryfall['prices']['usd_foil']:
             foil_price = float(scryfall['prices']['usd_foil'])
 
-        logger.debug("Prices from Scryfall for %s are %s/%s" % (name, price,
-                                                                foil_price))
+        total_value = (price * qty) + (foil_qty * foil_price)
+        if total_value > 5:
+            logger.debug(
+                "Prices from Scryfall for %s [%s] are %s/%s Total:%2.2f" %
+                (name, edition, price, foil_price, total_value))
 
     foil_cutoff = 1
 
@@ -369,18 +368,31 @@ def tradeable_decked(_used_cards, row):
 
     if scryfall:
         if not 'set_name' in scryfall:
-            logger.error("MIssing set_name from scryfall %r" % scryfall)
+            logger.error("Missing set_name from scryfall %r" % scryfall)
+
         scryfall_set_name = scryfall['set_name']
         scryfall_set = scryfall['set']
 
+        # Fix Conspiracy
+        if scryfall_set == "cns":
+            edition = scryfall_set_name
+
         if scryfall_set_name != None:
             if edition != scryfall_set_name:
-                logger.debug("XXX Set %s vs %s" % (edition, scryfall_set_name))
+                mvid = row.get('Mvid')
+                logger.debug("[mvid:%s] Set %s vs %s" % (mvid, edition,
+                                                         scryfall_set_name))
 
     # edition = scryfall_set_name
 
-    if edition == "Magic: The Gathering-Conspiracy":
-        edition = "Conspiracy"
+    if scryfall:
+        if scryfall['layout'] != "normal":
+            if scryfall['name'] != name:
+                if scryfall['card_faces'][0]['name'] != name:
+                    logger.warning(
+                        "Card name isn't of the first face %s vs %s [%s]" %
+                        (name, scryfall['name'], scryfall['layout']))
+                    name = scryfall['card_faces'][0]['name']
 
     if edition == 'Time Spiral ""Timeshifted""':
         edition = 'Time Spiral "Timeshifted"'
@@ -393,15 +405,6 @@ def tradeable_decked(_used_cards, row):
 
     if edition == 'Planechase 2012 Edition':
         edition = 'Planechase 2012'
-
-    import re
-    name = re.sub(" \([ab]\)$", "", name)
-
-    if name == 'Sword of Dungeons &amp; Dragons':
-        name = 'Sword of Dungeons & Dragons'
-
-    if name == 'Unholy Fiend':
-        name = 'Cloistered Youth'
 
     collector_number = 0
     if scryfall:
@@ -455,6 +458,28 @@ def tradeable_decked(_used_cards, row):
             'Textless': '',
             'My Price': format(price, '.2f'),
         }
+
+
+def mtg_studio(card):
+    name = card.get('Card')
+    scryfall = card.get('scryfall')
+
+    output = {**card}
+
+    if scryfall and scryfall['name'] and scryfall['name'] != name:
+        output['Card'] = scryfall['name']
+
+    # Skip Basic lands
+    if scryfall and scryfall['type_line'].startswith("Basic Land"):
+        return
+
+    yield output
+
+
+#    yield {
+#        **card._asdict(),
+#        'Name': name,
+#    }
 
 
 @use_raw_input
