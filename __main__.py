@@ -8,6 +8,8 @@ import requests
 import logging
 import mondrian
 
+from copy import copy
+
 # One line setup (excepthook=True tells mondrian to handle uncaught exceptions)
 mondrian.setup(excepthook=True)
 
@@ -192,7 +194,7 @@ def get_graph(**options):
 
 def remove_metadata(card):
     if 'scryfall' in card:
-        out_card = {**card}
+        out_card = copy(card)
         out_card.pop('scryfall')
         yield out_card
     else:
@@ -255,11 +257,18 @@ def metadata(card, *, http):
                          (name, scryfall['name'], layout))
             name = scryfall['name']
 
-    if scryfall and scryfall['reserved']:
-        logger.warning("Reserved card: %s [%s]: %.2f$" %
-                       (scryfall['name'], scryfall['set_name'],
-                        float(scryfall['prices']['usd'])))
-
+    if scryfall:
+        if scryfall['reserved']:
+            logger.warning("Reserved card: %s [%s]: %.2f$" %
+                           (scryfall['name'], scryfall['set_name'],
+                            float(scryfall['prices']['usd'])))
+        elif float(scryfall['prices']['usd'] or 0) > 1:
+            value = float(scryfall['prices']['usd'] or 0) * int(
+                card.get('Total Qty'))
+            logger.warning("%s [%s] : %d x %.2f$ == %.2f$" %
+                           (scryfall['name'], scryfall['set_name'],
+                            int(card.get('Total Qty')),
+                            float(scryfall['prices']['usd']), value))
     yield {
         **card._asdict(),
         'Card': name,
@@ -464,7 +473,7 @@ def mtg_studio(card):
     name = card.get('Card')
     scryfall = card.get('scryfall')
 
-    output = {**card}
+    output = copy(card)
 
     if scryfall and scryfall['name'] and scryfall['name'] != name:
         output['Card'] = scryfall['name']
@@ -474,12 +483,6 @@ def mtg_studio(card):
         return
 
     yield output
-
-
-#    yield {
-#        **card._asdict(),
-#        'Name': name,
-#    }
 
 
 @use_raw_input
