@@ -221,9 +221,10 @@ def metadata(card, *, http):
                                (mvid, response.get('details')))
         except Exception as e:
             logger.warning("[scryfall] Looking up %r failed: Exception was %r"
-                           % (card.get('Card'), e))
+                           % (name, e))
 
-    if not scryfall:
+    # mvid == 0 => promo cards of some sort
+    if mvid > 0 and not scryfall:
         set_name = card.get('Set')
 
         logger.debug("[mvid:%s] falling back %s [%s]" % (mvid, name, set_name))
@@ -339,7 +340,6 @@ def deckbox(_used_cards, row):
     #mtgio = row.get('mtgio')
 
     if scryfall and 'prices' in scryfall:
-        # XXX: Check for foil somehow...
         if scryfall['prices']['usd']:
             price = float(scryfall['prices']['usd'])
         if scryfall['prices']['usd_foil']:
@@ -351,10 +351,10 @@ def deckbox(_used_cards, row):
                 "Prices from Scryfall for %s [%s] are %s/%s Total:%2.2f" %
                 (name, edition, price, foil_price, total_value))
 
-    foil_cutoff = 1
+    foil_cutoff = 4
 
     if rarity == "Rare" or rarity == "Mythic Rare":
-        qty_cutoff = 1
+        qty_cutoff = 4
     else:
         qty_cutoff = CUTOFF
 
