@@ -21,14 +21,6 @@ import requests_cache
 requests_cache.install_cache(
     'scryfall', backend='sqlite', expire_after=60 * 60 * 24 * 7)
 
-from mtgtools.MtgDB import MtgDB
-from mtgsdk import Card, Set
-#import scrython
-#from scryfall_cache import ScryfallCache
-#cache = ScryfallCache(application="scryfall_tests")
-
-MTG_DB = MtgDB('mtgdb.fs')
-
 NO_SALE = True
 CUTOFF = 8
 PRICE_MODIFIER = 0.95
@@ -37,6 +29,10 @@ IN_USE_CARDS = {}
 DEBUG = False
 QUALITY = 'Near Mint'
 LANGUAGE = 'English'
+
+MTG_STUDIO = True
+DECKBOX = True
+ECHO_MTG = False
 
 
 def _used_cards(foo, bar):
@@ -124,36 +120,39 @@ def get_graph(**options):
         _output="main",
     )
 
-    #Reg Qty,Foil Qty,Name,Set,Acquired,Language
-    echomtg = {
-        "Acquired For": "0.004",
-        "Language": "en",
-    }
-    graph.add_chain(
-        # echomtg specific fiddling
-        remove_metadata,
-        bonobo.UnpackItems(0),
-        #bonobo.PrettyPrinter(),
-        bonobo.Rename(Name='Card', ),
-        bonobo.Format(**echomtg, ),
-        bonobo.CsvWriter("EchoMTG.csv"),
-        _input=split,
-    )
+    if ECHO_MTG:
+        #Reg Qty,Foil Qty,Name,Set,Acquired,Language
+        echomtg = {
+            "Acquired For": "0.004",
+            "Language": "en",
+        }
+        graph.add_chain(
+            # echomtg specific fiddling
+            remove_metadata,
+            bonobo.UnpackItems(0),
+            #bonobo.PrettyPrinter(),
+            bonobo.Rename(Name='Card', ),
+            bonobo.Format(**echomtg, ),
+            bonobo.CsvWriter("EchoMTG.csv"),
+            _input=split,
+        )
 
     # MTG Studio
-    graph.add_chain(
-        mtg_studio,
-        remove_metadata,
-        bonobo.UnpackItems(0),
-        bonobo.Rename(
-            Name='Card',
-            Edition='Set',
-            Qty='Reg Qty',
-            Foil='Foil Qty',
-        ),
-        bonobo.CsvWriter("MTG-Studio.csv"),
-        _input=split,
-    )
+
+    if MTG_STUDIO:
+        graph.add_chain(
+            mtg_studio,
+            remove_metadata,
+            bonobo.UnpackItems(0),
+            bonobo.Rename(
+                Name='Card',
+                Edition='Set',
+                Qty='Reg Qty',
+                Foil='Foil Qty',
+            ),
+            bonobo.CsvWriter("MTG-Studio.csv"),
+            _input=split,
+        )
 
     #    graph.add_chain(
     #        tradeable,
@@ -180,14 +179,15 @@ def get_graph(**options):
     #        _input=split,
     #    )
     #
-    graph.add_chain(
-        #       # metadata,
-        #        #bonobo.UnpackItems(0),
-        tradeable_decked,
-        bonobo.UnpackItems(0),
-        bonobo.CsvWriter("Deckbox-inventory.csv"),
-        _input=split,
-    )
+    if DECKBOX:
+        graph.add_chain(
+            #       # metadata,
+            #        #bonobo.UnpackItems(0),
+            deckbox,
+            bonobo.UnpackItems(0),
+            bonobo.CsvWriter("Deckbox-inventory.csv"),
+            _input=split,
+        )
 
     return graph
 
@@ -204,28 +204,29 @@ def remove_metadata(card):
 @use('http')
 @use_raw_input
 def metadata(card, *, http):
-    mvid = card.get('Mvid')
+    mvid = int(card.get('Mvid') or 0)
     name = card.get('Card')
 
     scryfall = None
 
-    if mvid:
+    # Decked Builder bug mvids are very high
+    if mvid > 0 and mvid < 1200000:
         try:
             response = requests.get(
                 "https://api.scryfall.com/cards/multiverse/%s" % mvid).json()
             if response.get("object") == "card":
                 scryfall = response
             else:
-                logger.debug("[mvid:%s] Invalid scyfall response %r" %
-                             (mvid, response.get('details')))
+                logger.warning("[mvid:%s] Invalid scyfall response %r" %
+                               (mvid, response.get('details')))
         except Exception as e:
-            logger.debug("[scryfall] Looking up %r failed: Exception was %r" %
-                         (card.get('Card'), e))
+            logger.warning("[scryfall] Looking up %r failed: Exception was %r"
+                           % (card.get('Card'), e))
+
     if not scryfall:
         set_name = card.get('Set')
 
-        logger.debug("[mvid:%s] lookup failed, falling back %s [%s]" %
-                     (mvid, name, set_name))
+        logger.debug("[mvid:%s] falling back %s [%s]" % (mvid, name, set_name))
 
         set = list(
             filter(
@@ -246,6 +247,8 @@ def metadata(card, *, http):
 
         if len(cards) == 1:
             scryfall = cards[0]
+            diff = int(mvid) - scryfall['multiverse_ids'][0]
+            logger.debug("Diff is %s" % diff)
             mvid = scryfall['multiverse_ids'][0]
 
     #XXX: What to do with Scryfall-less cards...
@@ -259,16 +262,16 @@ def metadata(card, *, http):
 
     if scryfall:
         if scryfall['reserved']:
-            logger.warning("Reserved card: %s [%s]: %.2f$" %
-                           (scryfall['name'], scryfall['set_name'],
-                            float(scryfall['prices']['usd'])))
+            logger.debug("Reserved card: %s [%s]: %.2f$" %
+                         (scryfall['name'], scryfall['set_name'],
+                          float(scryfall['prices']['usd'])))
         elif float(scryfall['prices']['usd'] or 0) > 1:
             value = float(scryfall['prices']['usd'] or 0) * int(
                 card.get('Total Qty'))
-            logger.warning("%s [%s] : %d x %.2f$ == %.2f$" %
-                           (scryfall['name'], scryfall['set_name'],
-                            int(card.get('Total Qty')),
-                            float(scryfall['prices']['usd']), value))
+            logger.debug("%s [%s] : %d x %.2f$ == %.2f$" %
+                         (scryfall['name'], scryfall['set_name'],
+                          int(card.get('Total Qty')),
+                          float(scryfall['prices']['usd']), value))
     yield {
         **card._asdict(),
         'Card': name,
@@ -311,7 +314,7 @@ def more_than_set(row):
 
 #Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price
 @use_context_processor(_used_cards)
-def tradeable_decked(_used_cards, row):
+def deckbox(_used_cards, row):
 
     #pprint.pprint(_used_cards)
     edition = row.get('Set')
@@ -579,20 +582,13 @@ def get_services(**options):
 
     return {
         'http': requests.Session(),
-        'mtgdb': MTG_DB,
     }
 
 
 # The __main__ block actually execute the graph.
 if __name__ == '__main__':
     parser = bonobo.get_argument_parser()
-
-    parser.add_argument('--update', action='store_true', default=False)
-
     with bonobo.parse_args(parser) as options:
-        if options['update']:
-            MTG_DB.scryfall_update()
-            MTG_DB.mtgio_update()
 
         bonobo.run(get_decks(**options), services=get_services(**options))
         bonobo.run(get_graph(**options), services=get_services(**options))
