@@ -418,6 +418,9 @@ def deckbox(_used_cards, row):
     if edition == 'Planechase 2012 Edition':
         edition = 'Planechase 2012'
 
+    if edition == 'Commander Anthology 2018':
+        edition = 'Commander Anthology Volume II'
+
     collector_number = 0
     if scryfall:
         collector_number = scryfall['collector_number']
