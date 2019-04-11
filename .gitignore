@@ -107,3 +107,4 @@ venv.bak/
 *.csv
 *.sqlite
 mtgdb.fs*
+.web_cache/
