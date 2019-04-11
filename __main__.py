@@ -3,7 +3,6 @@ from bonobo.config import use, use_context, use_raw_input, use_context_processor
 from bonobo.constants import NOT_MODIFIED
 from os import listdir
 from os.path import isfile, join
-import requests
 
 import logging
 import mondrian
@@ -17,9 +16,17 @@ mondrian.setup(excepthook=True)
 logger = logging.getLogger("mtg")
 logger.setLevel(logging.INFO)
 
-import requests_cache
-requests_cache.install_cache(
-    'scryfall', backend='sqlite', expire_after=60 * 60 * 24 * 7)
+import random
+CACHE_TIME = 60 * 60 * 24 * 6 + (60 * 60 * random.randint(0, 24))
+
+import requests as req
+from cachecontrol import CacheControl, CacheControlAdapter
+from cachecontrol.caches.file_cache import FileCache
+from cachecontrol.heuristics import ExpiresAfter
+
+CACHE = FileCache('.web_cache')
+requests = CacheControl(
+    req.Session(), cache=CACHE, heuristic=ExpiresAfter(seconds=CACHE_TIME))
 
 NO_SALE = True
 CUTOFF = 8
@@ -581,10 +588,8 @@ def get_services(**options):
     :return: dict
     """
 
-    #mtg_db.mtgio_update()
-
     return {
-        'http': requests.Session(),
+        'http': requests,
     }
 
 
@@ -594,4 +599,7 @@ if __name__ == '__main__':
     with bonobo.parse_args(parser) as options:
 
         bonobo.run(get_decks(**options), services=get_services(**options))
-        bonobo.run(get_graph(**options), services=get_services(**options))
+        bonobo.run(
+            get_graph(**options),
+            services=get_services(**options),
+            strategy="threadpool")
