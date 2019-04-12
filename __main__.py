@@ -17,7 +17,8 @@ logger = logging.getLogger("mtg")
 logger.setLevel(logging.INFO)
 
 import random
-CACHE_TIME = 60 * 60 * 24 * 6 + (60 * 60 * random.randint(0, 24))
+CACHE_TIME = 14 + (random.randint(0, 14))
+logger.warning("Caching for %d days" % CACHE_TIME)
 
 import requests as req
 from cachecontrol import CacheControl, CacheControlAdapter
@@ -26,7 +27,7 @@ from cachecontrol.heuristics import ExpiresAfter
 
 CACHE = FileCache('.web_cache')
 requests = CacheControl(
-    req.Session(), cache=CACHE, heuristic=ExpiresAfter(seconds=CACHE_TIME))
+    req.Session(), cache=CACHE, heuristic=ExpiresAfter(days=CACHE_TIME))
 
 NO_SALE = True
 CUTOFF = 8
@@ -427,6 +428,9 @@ def deckbox(_used_cards, row):
 
     if edition == 'Commander Anthology 2018':
         edition = 'Commander Anthology Volume II'
+
+    if edition  == 'M19 Gift Pack':
+        edition = 'M19 Gift Pack Promos'
 
     collector_number = 0
     if scryfall:
