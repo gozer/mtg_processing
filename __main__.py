@@ -429,7 +429,7 @@ def deckbox(_used_cards, row):
     if edition == 'Commander Anthology 2018':
         edition = 'Commander Anthology Volume II'
 
-    if edition  == 'M19 Gift Pack':
+    if edition == 'M19 Gift Pack':
         edition = 'M19 Gift Pack Promos'
 
     collector_number = 0
