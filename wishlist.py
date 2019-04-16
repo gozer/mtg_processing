@@ -11,6 +11,8 @@ import mondrian
 
 from copy import copy
 
+import util
+
 # One line setup (excepthook=True tells mondrian to handle uncaught exceptions)
 mondrian.setup(excepthook=True)
 
@@ -60,9 +62,7 @@ def inventory(_inventory, *card):
 
 
 @use('http')
-def get_standard(http):
-    #sets =  http.get("https://mtgjson.com/json/Standard.json").json()
-
+def get_cards(http):
     sets = http.get("https://mtgjson.com/json/AllSets.json").json()
 
     set_map = {}
@@ -88,7 +88,7 @@ def get_standard(http):
 def wishlist_map(_inventory, card):
     #Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless
     name = card['name']
-    edition = card['edition_name']
+    edition = util.edition_to_deckbox(card['edition_name'])
     set_type = card['set_type']
 
     # Skip Basic Lands
@@ -108,17 +108,15 @@ def wishlist_map(_inventory, card):
         # Not released yet, wish we could tell
         "MH1",
         "WAR",
-        
+
         # Too Expsnsive!
         "LEA",
         "LEB",
         "2ED",
         "3ED",
-        
         "LEG",
         "ARN",
         "ATQ",
-        
     ]
 
     if card['edition'] in set_exclusions:
@@ -143,38 +141,6 @@ def wishlist_map(_inventory, card):
         return
 
     #XXX Refactor plz
-    if edition == 'Time Spiral Timeshifted':
-        edition = 'Time Spiral "Timeshifted"'
-
-    if edition == 'Magic: The Gathering-Commander':
-        edition = "Commander"
-
-    if edition == 'Magic 2014':
-        edition = "Magic 2014 Core Set"
-
-    if edition == 'Magic 2015':
-        edition = "Magic 2015 Core Set"
-
-    if edition == 'Modern Masters 2015':
-        edition = "Modern Masters 2015 Edition"
-
-    if edition == 'Modern Masters 2017':
-        edition = "Modern Masters 2017 Edition"
-
-    if edition == 'Commander 2013 Edition':
-        edition = "Commander 2013"
-
-    if edition == 'Commander 2011':
-        edition = "Commander"
-
-    if edition == 'Planechase 2012 Edition':
-        edition = 'Planechase 2012'
-
-    if edition == 'Commander Anthology 2018':
-        edition = 'Commander Anthology Volume II'
-
-    if edition == 'M19 Gift Pack':
-        edition = 'M19 Gift Pack Promos'
 
     want = 4
 
@@ -238,11 +204,10 @@ def get_graph(**options):
     graph = bonobo.Graph()
 
     graph.add_chain(
-        get_standard,
+        get_cards,
         wishlist_map,
         bonobo.UnpackItems(0),
         bonobo.CsvWriter("Deckbox-wishlist.csv"),
-        #_input=None,
         _name="main",
     )
 
