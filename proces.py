@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import bonobo
 from bonobo.config import use, use_context, use_raw_input, use_context_processor
 from bonobo.constants import NOT_MODIFIED
@@ -256,9 +258,10 @@ def metadata(card, *, http):
 
         if len(cards) == 1:
             scryfall = cards[0]
-            diff = int(mvid) - scryfall['multiverse_ids'][0]
-            logger.debug("Diff is %s" % diff)
-            mvid = scryfall['multiverse_ids'][0]
+            if len(scryfall['multiverse_ids']) == 1:
+                diff = int(mvid) - scryfall['multiverse_ids'][0]
+                logger.debug("Diff is %s" % diff)
+                mvid = scryfall['multiverse_ids'][0]
 
     #XXX: What to do with Scryfall-less cards...
 

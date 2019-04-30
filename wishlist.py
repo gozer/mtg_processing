@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 import bonobo
+import bonobo_sqlalchemy
 from bonobo.config import use, use_context, use_raw_input, use_context_processor
 from bonobo.constants import NOT_MODIFIED
 from os import listdir
 from os.path import isfile, join
+
+from sqlalchemy import create_engine
 
 import logging
 import mondrian
@@ -18,7 +21,7 @@ mondrian.setup(excepthook=True)
 
 # Use logging, as usual.
 logger = logging.getLogger("mtg")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 import random
 CACHE_TIME = 14 + (random.randint(0, 14))
@@ -40,11 +43,14 @@ def _inventory(foo, bar):
     yield INVENTORY
 
 
+#Count,Tradelist Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless,My Price
 @use_context_processor(_inventory)
-def inventory(_inventory, *card):
-    edition = card[3]
-    name = card[2]
-    foil = card[7]
+def inventory(_inventory, count, tradelist, name, edition, number, condition,
+              language, foil, *card):
+
+    #edition = card.get('Edition')
+    #name = card.get('Name')
+    #foil = card.get('Foil')
 
     # Skip Foils
     if foil:
@@ -56,24 +62,30 @@ def inventory(_inventory, *card):
     if name not in _inventory[edition]:
         _inventory[edition][name] = 0
 
-    _inventory[edition][name] += int(card[0])
+    _inventory[edition][name] += int(count)
 
-    yield card
+    yield NOT_MODIFIED
 
 
 @use('http')
 def get_cards(http):
-    sets = http.get("https://mtgjson.com/json/AllSets.json").json()
+    #sets = http.get("https://mtgjson.com/json/AllSets.json").json()
+    sets = http.get("https://mtgjson.com/json/Standard.json").json()
+
+    for extra_set in ["WAR"]:
+        set_url = "https://mtgjson.com/json/%s.json" % extra_set
+        info = http.get(set_url).json()
+        sets.update({extra_set: info})
 
     set_map = {}
     for set_info in http.get("https://mtgjson.com/json/SetList.json").json():
         set_map[set_info['code']] = [set_info['name'], set_info['type']]
 
     for set_code, set_data in sets.items():
-        print("Finding cards out of %s" % set_code)
         set_info = set_map.get(set_code)
         if not set_info:
-            print("XXX: Can't find setinfo for %s %s" % (card, set_code))
+            print(
+                "XXX: Can't find setinfo for %s %s" % (set_code, card['name']))
             continue
 
         for card in set_data.get("cards"):
@@ -107,7 +119,6 @@ def wishlist_map(_inventory, card):
 
         # Not released yet, wish we could tell
         "MH1",
-        "WAR",
 
         # Too Expsnsive!
         "LEA",
@@ -187,7 +198,17 @@ def get_inventory_graph(**options):
     graph.add_chain(
         bonobo.CsvReader("Deckbox-inventory.csv"),
         inventory,
-        #_input=None,
+        bonobo.Rename(
+            Card_Number="Card Number", Tradelist_Count="Tradelist Count"),
+        bonobo_sqlalchemy.InsertOrUpdate(
+            'cards',
+            discriminant=(
+                'Name',
+                'Edition',
+                'Card_Number',
+                'Foil',
+            ),
+            engine='cards'),
         _name="main",
     )
 
@@ -229,7 +250,11 @@ def get_services(**options):
     """
 
     return {
-        'http': requests,
+        'http':
+        requests,
+        # 'cards': create_engine("sqlite:///inventory.sqlite3", echo=False),
+        'cards':
+        create_engine("mysql+pymysql://mtg:mtg@localhost/mtg", echo=False),
     }
 
 
