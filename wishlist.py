@@ -82,6 +82,7 @@ def get_cards(http):
         set_map[set_info['code']] = [set_info['name'], set_info['type']]
 
     for set_code, set_data in sets.items():
+        print("Finding cards out of %s" % set_code)
         set_info = set_map.get(set_code)
         if not set_info:
             print(

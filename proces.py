@@ -32,12 +32,11 @@ requests = CacheControl(
     req.Session(), cache=CACHE, heuristic=ExpiresAfter(days=CACHE_TIME))
 
 NO_SALE = True
-CUTOFF = 8
+CUTOFF = 4
 PRICE_MODIFIER = 0.95
 MIN_PRICE = 0.25
 IN_USE_CARDS = {}
-DEBUG = False
-QUALITY = 'Near Mint'
+QUALITY = ''
 LANGUAGE = 'English'
 
 MTG_STUDIO = True
@@ -154,12 +153,12 @@ def get_graph(**options):
             mtg_studio,
             remove_metadata,
             bonobo.UnpackItems(0),
-            bonobo.Rename(
-                Name='Card',
-                Edition='Set',
-                Qty='Reg Qty',
-                Foil='Foil Qty',
-            ),
+            #bonobo.Format(Edition='{Set}'),
+            bonobo.Rename(Edition='Set'),
+            #bonobo.Rename(Name='Card'),
+            #bonobo.Rename(Qty='Reg Qty'),
+            #bonobo.Rename(Foil='Foil Qty'),
+            #bonobo.PrettyPrinter(),
             bonobo.CsvWriter("MTG-Studio.csv"),
             _input=split,
         )
