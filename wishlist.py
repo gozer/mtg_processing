@@ -31,10 +31,20 @@ import requests as req
 from cachecontrol import CacheControl, CacheControlAdapter
 from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.heuristics import ExpiresAfter
+from cachecontrol.heuristics import LastModified
 
 CACHE = FileCache('.web_cache')
-requests = CacheControl(
-    req.Session(), cache=CACHE, heuristic=ExpiresAfter(days=CACHE_TIME))
+requests = CacheControl(req.Session(),
+                        cache=CACHE,
+                        heuristic=ExpiresAfter(days=CACHE_TIME))
+
+EXTRA_SETS = (
+    "JOU",
+    "BNG",
+    "GTC",
+    "RTR",
+    "WAR",
+)
 
 INVENTORY = {}
 
@@ -72,7 +82,7 @@ def get_cards(http):
     #sets = http.get("https://mtgjson.com/json/AllSets.json").json()
     sets = http.get("https://mtgjson.com/json/Standard.json").json()
 
-    for extra_set in ["WAR"]:
+    for extra_set in EXTRA_SETS:
         set_url = "https://mtgjson.com/json/%s.json" % extra_set
         info = http.get(set_url).json()
         sets.update({extra_set: info})
@@ -85,8 +95,8 @@ def get_cards(http):
         print("Finding cards out of %s" % set_code)
         set_info = set_map.get(set_code)
         if not set_info:
-            print(
-                "XXX: Can't find setinfo for %s %s" % (set_code, card['name']))
+            print("XXX: Can't find setinfo for %s %s" %
+                  (set_code, card['name']))
             continue
 
         for card in set_data.get("cards"):
@@ -106,6 +116,13 @@ def wishlist_map(_inventory, card):
 
     # Skip Basic Lands
     if "Basic" in card['supertypes']:
+        return
+
+    # Skip Common/Uncommons
+    if card['rarity'] in ["common", "uncommon"]:
+        return
+
+    if card['number'].endswith("★"):
         return
 
     set_exclusions = [
@@ -199,17 +216,17 @@ def get_inventory_graph(**options):
     graph.add_chain(
         bonobo.CsvReader("Deckbox-inventory.csv"),
         inventory,
-        bonobo.Rename(
-            Card_Number="Card Number", Tradelist_Count="Tradelist Count"),
-        bonobo_sqlalchemy.InsertOrUpdate(
-            'cards',
-            discriminant=(
-                'Name',
-                'Edition',
-                'Card_Number',
-                'Foil',
-            ),
-            engine='cards'),
+        bonobo.Rename(Card_Number="Card Number",
+                      Tradelist_Count="Tradelist Count"),
+        #        bonobo_sqlalchemy.InsertOrUpdate(
+        #            'cards',
+        #            discriminant=(
+        #                'Name',
+        #               'Edition',
+        ##               'Card_Number',
+        ##              'Foil',
+        #          ),
+        #          engine='cards'),
         _name="main",
     )
 

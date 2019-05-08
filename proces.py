@@ -28,12 +28,13 @@ from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.heuristics import ExpiresAfter
 
 CACHE = FileCache('.web_cache')
-requests = CacheControl(
-    req.Session(), cache=CACHE, heuristic=ExpiresAfter(days=CACHE_TIME))
+requests = CacheControl(req.Session(),
+                        cache=CACHE,
+                        heuristic=ExpiresAfter(days=CACHE_TIME))
 
-NO_SALE = True
+SALE = False
 CUTOFF = 4
-PRICE_MODIFIER = 0.95
+PRICE_MODIFIER = 1.15
 MIN_PRICE = 0.25
 IN_USE_CARDS = {}
 QUALITY = ''
@@ -229,8 +230,9 @@ def metadata(card, *, http):
                 logger.warning("[mvid:%s] Invalid scyfall response %r" %
                                (mvid, response.get('details')))
         except Exception as e:
-            logger.warning("[scryfall] Looking up %r failed: Exception was %r"
-                           % (name, e))
+            logger.warning(
+                "[scryfall] Looking up %r failed: Exception was %r" %
+                (name, e))
 
     # mvid == 0 => promo cards of some sort
     if mvid > 0 and not scryfall:
@@ -251,9 +253,8 @@ def metadata(card, *, http):
             params = {
                 'q': "set:%s name:\"%s\"" % (set_code, name),
             }
-            cards = requests.get(
-                "https://api.scryfall.com/cards/search",
-                params=params).json().get("data", [])
+            cards = requests.get("https://api.scryfall.com/cards/search",
+                                 params=params).json().get("data", [])
 
         if len(cards) == 1:
             scryfall = cards[0]
@@ -402,8 +403,8 @@ def deckbox(_used_cards, row):
         if scryfall_set_name != None:
             if edition != scryfall_set_name:
                 mvid = row.get('Mvid')
-                logger.debug("[mvid:%s] Set %s vs %s" % (mvid, edition,
-                                                         scryfall_set_name))
+                logger.debug("[mvid:%s] Set %s vs %s" %
+                             (mvid, edition, scryfall_set_name))
 
     # edition = scryfall_set_name
 
@@ -439,7 +440,7 @@ def deckbox(_used_cards, row):
         collector_number = scryfall['collector_number']
 
     # Dont sell yet
-    if NO_SALE:
+    if not SALE:
         price = 0
         foil_price = 0
 
@@ -466,7 +467,7 @@ def deckbox(_used_cards, row):
         # Don't price below MIN_PRICE
         price = price * PRICE_MODIFIER
 
-        if price < MIN_PRICE and not NO_SALE:
+        if price < MIN_PRICE and SALE:
             price = MIN_PRICE
 
         yield {
@@ -605,7 +606,6 @@ if __name__ == '__main__':
     with bonobo.parse_args(parser) as options:
 
         bonobo.run(get_decks(**options), services=get_services(**options))
-        bonobo.run(
-            get_graph(**options),
-            services=get_services(**options),
-            strategy="threadpool")
+        bonobo.run(get_graph(**options),
+                   services=get_services(**options),
+                   strategy="threadpool")
