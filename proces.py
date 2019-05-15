@@ -369,19 +369,19 @@ def deckbox(_used_cards, row):
     else:
         qty_cutoff = CUTOFF
 
-    # Are we using this card in our built decks ?
-    if edition in _used_cards:
-        if name in _used_cards[edition]:
-            deck_qty = _used_cards[edition][name]
-            if deck_qty > qty_cutoff:
-                qty_cutoff = deck_qty
-            #qty_cutoff += deck_qty
-
     if standard:
         if qty_cutoff < 4:
             qty_cutoff = 4
         if foil_cutoff < 4:
             foil_cutoff = 4
+
+    # Are we using this card in our built decks ?
+    if edition in _used_cards:
+        if name in _used_cards[edition]:
+            deck_qty = _used_cards[edition][name]
+            #if deck_qty > qty_cutoff:
+            #    qty_cutoff = deck_qty
+            qty_cutoff += deck_qty
 
     if qty > qty_cutoff:
         trade_qty = qty - qty_cutoff

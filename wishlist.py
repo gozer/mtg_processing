@@ -43,7 +43,6 @@ EXTRA_SETS = (
     "BNG",
     "GTC",
     "RTR",
-    "WAR",
 )
 
 INVENTORY = {}
@@ -99,6 +98,7 @@ def get_cards(http):
                   (set_code, card['name']))
             continue
 
+        # for token in set_data.get("tokens"):
         for card in set_data.get("cards"):
             card['edition'] = set_code
             card['edition_name'] = set_map.get(set_code)[0]
@@ -115,12 +115,22 @@ def wishlist_map(_inventory, card):
     set_type = card['set_type']
 
     # Skip Basic Lands
-    if "Basic" in card['supertypes']:
+    if 'supertypes' in card and "Basic" in card['supertypes']:
         return
 
-    # Skip Common/Uncommons
+    isStarter = False
+    if 'isStarter' in card and card['isStarter']:
+        isStarter = True
+
+    isStandard = False
+    if 'legalities' in card and card['legalities'].get('standard') == 'Legal':
+        isStandard = True
+
+    # Skip Common/Uncommons unless isStarter
     if card['rarity'] in ["common", "uncommon"]:
-        return
+        if isStandard and not isStarter:
+            print("Skipping [%s] %s" % (name, edition))
+            return
 
     if card['number'].endswith("★"):
         return
@@ -183,6 +193,9 @@ def wishlist_map(_inventory, card):
     if edition in _inventory:
         if name in _inventory[edition]:
             have_count = _inventory[edition][name]
+
+    # handle things we want more than 4 of, mostly stuff in our decks
+    # XXX
 
     if have_count < want:
         want -= have_count
