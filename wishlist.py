@@ -39,10 +39,17 @@ requests = CacheControl(req.Session(),
                         heuristic=ExpiresAfter(days=CACHE_TIME))
 
 EXTRA_SETS = (
-    "JOU",
-    "BNG",
-    "GTC",
-    "RTR",
+    "UMA",
+    "BFZ",
+    "OGW",
+    # "AKH",
+    # "AER",
+    # "UST",
+    # "HOU",
+    # "JOU",
+    # "BNG",
+    # "GTC",
+    # "RTR",
 )
 
 INVENTORY = {}
@@ -107,6 +114,30 @@ def get_cards(http):
             yield card
 
 
+WANTS_A_LOT = [
+    'Pteramander',
+    'Chromatic Lantern',
+    'Lava Coil',
+    'Venerated Loxodon',
+    'Thief of Sanity',
+    'Banefire',
+    'Lava Coil',
+    'Absorb',
+    'Duress',
+    'Shock',
+    'Banefire',
+    'Settle the Wreckage',
+    'Light Up the Stage',
+    'Tempest Djinn',
+    'Legion Warboss',
+    'Watery Grave',
+    "Karn's Bastion",
+    "Dovin's Veto",
+    'Despark',
+    'Deputy of Detention',
+]
+
+
 @use_context_processor(_inventory)
 def wishlist_map(_inventory, card):
     #Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless
@@ -126,11 +157,11 @@ def wishlist_map(_inventory, card):
     if 'legalities' in card and card['legalities'].get('standard') == 'Legal':
         isStandard = True
 
-    # Skip Common/Uncommons unless isStarter
-    if card['rarity'] in ["common", "uncommon"]:
-        if isStandard and not isStarter:
-            print("Skipping [%s] %s" % (name, edition))
-            return
+    # Skip Common/Uncommons unless isStarter and not standard
+    if name not in WANTS_A_LOT:
+        if card['rarity'] in ["common", "uncommon"]:
+            if isStandard and not isStarter:
+                return
 
     if card['number'].endswith("★"):
         return
@@ -186,7 +217,7 @@ def wishlist_map(_inventory, card):
     if 'names' in card and len(card['names']) > 0:
         if name != card['names'][0]:
             return
-        if card['layout'] == "split":
+        if card['layout'] == "split" or card['layout'] == "aftermath":
             name = " // ".join(card['names'])
 
     have_count = 0
@@ -196,6 +227,10 @@ def wishlist_map(_inventory, card):
 
     # handle things we want more than 4 of, mostly stuff in our decks
     # XXX
+
+    if name in WANTS_A_LOT:
+        have_count = 0
+        want = 16
 
     if have_count < want:
         want -= have_count
