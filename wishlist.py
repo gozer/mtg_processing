@@ -42,6 +42,7 @@ EXTRA_SETS = (
     "UMA",
     "BFZ",
     "OGW",
+    "SOI",
     # "AKH",
     # "AER",
     # "UST",
@@ -51,6 +52,29 @@ EXTRA_SETS = (
     # "GTC",
     # "RTR",
 )
+
+WANTS_A_LOT = [
+    'Pteramander',
+    'Chromatic Lantern',
+    'Lava Coil',
+    'Venerated Loxodon',
+    'Thief of Sanity',
+    'Banefire',
+    'Lava Coil',
+    'Absorb',
+    'Duress',
+    'Shock',
+    'Banefire',
+    'Settle the Wreckage',
+    'Light Up the Stage',
+    'Tempest Djinn',
+    'Legion Warboss',
+    'Watery Grave',
+    "Karn's Bastion",
+    "Dovin's Veto",
+    'Despark',
+    'Deputy of Detention',
+]
 
 INVENTORY = {}
 
@@ -114,36 +138,14 @@ def get_cards(http):
             yield card
 
 
-WANTS_A_LOT = [
-    'Pteramander',
-    'Chromatic Lantern',
-    'Lava Coil',
-    'Venerated Loxodon',
-    'Thief of Sanity',
-    'Banefire',
-    'Lava Coil',
-    'Absorb',
-    'Duress',
-    'Shock',
-    'Banefire',
-    'Settle the Wreckage',
-    'Light Up the Stage',
-    'Tempest Djinn',
-    'Legion Warboss',
-    'Watery Grave',
-    "Karn's Bastion",
-    "Dovin's Veto",
-    'Despark',
-    'Deputy of Detention',
-]
-
-
 @use_context_processor(_inventory)
 def wishlist_map(_inventory, card):
     #Count,Name,Edition,Card Number,Condition,Language,Foil,Signed,Artist Proof,Altered Art,Misprint,Promo,Textless
     name = card['name']
     edition = util.edition_to_deckbox(card['edition_name'])
     set_type = card['set_type']
+
+    want = 4
 
     # Skip Basic Lands
     if 'supertypes' in card and "Basic" in card['supertypes']:
@@ -160,8 +162,12 @@ def wishlist_map(_inventory, card):
     # Skip Common/Uncommons unless isStarter and not standard
     if name not in WANTS_A_LOT:
         if card['rarity'] in ["common", "uncommon"]:
-            if isStandard and not isStarter:
-                return
+            if isStandard:
+                if not isStarter:
+                    return
+            else:
+                # Pick only one of common/uncommons
+                want = 1
 
     if card['number'].endswith("★"):
         return
@@ -211,8 +217,6 @@ def wishlist_map(_inventory, card):
         return
 
     #XXX Refactor plz
-
-    want = 4
 
     if 'names' in card and len(card['names']) > 0:
         if name != card['names'][0]:
