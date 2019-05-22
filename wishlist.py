@@ -74,6 +74,9 @@ WANTS_A_LOT = [
     "Dovin's Veto",
     'Despark',
     'Deputy of Detention',
+    'Hydroid Krasis',
+    'Crucible of Worlds',
+    'Watery Grave',
 ]
 
 INVENTORY = {}
@@ -165,9 +168,9 @@ def wishlist_map(_inventory, card):
             if isStandard:
                 if not isStarter:
                     return
-            else:
-                # Pick only one of common/uncommons
-                want = 1
+#            else:
+#                # Pick only two of common/uncommons
+#                want = 2
 
     if card['number'].endswith("★"):
         return
