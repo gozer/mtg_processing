@@ -40,9 +40,9 @@ requests = CacheControl(req.Session(),
 
 EXTRA_SETS = (
     "UMA",
-    "BFZ",
-    "OGW",
-    "SOI",
+#    "BFZ",
+#    "OGW",
+#    "SOI",
     # "AKH",
     # "AER",
     # "UST",
