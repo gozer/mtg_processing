@@ -29,9 +29,9 @@ from cachecontrol.caches.file_cache import FileCache
 from cachecontrol.heuristics import ExpiresAfter
 
 CACHE = FileCache(".web_cache")
-requests = CacheControl(
-    req.Session(), cache=CACHE, heuristic=ExpiresAfter(days=CACHE_TIME)
-)
+requests = CacheControl(req.Session(),
+                        cache=CACHE,
+                        heuristic=ExpiresAfter(days=CACHE_TIME))
 
 SALE = False
 CUTOFF = 4
@@ -208,19 +208,16 @@ def metadata(card, *, http):
     if mvid > 0 and mvid < 1200000:
         try:
             response = requests.get(
-                "https://api.scryfall.com/cards/multiverse/%s" % mvid
-            ).json()
+                "https://api.scryfall.com/cards/multiverse/%s" % mvid).json()
             if response.get("object") == "card":
                 scryfall = response
             else:
-                logger.warning(
-                    "[mvid:%s] Invalid scyfall response %r"
-                    % (mvid, response.get("details"))
-                )
+                logger.warning("[mvid:%s] Invalid scyfall response %r" %
+                               (mvid, response.get("details")))
         except Exception as e:
             logger.warning(
-                "[scryfall] Looking up %r failed: Exception was %r" % (name, e)
-            )
+                "[scryfall] Looking up %r failed: Exception was %r" %
+                (name, e))
 
     # mvid == 0 => promo cards of some sort
     if mvid > 0 and not scryfall:
@@ -231,20 +228,17 @@ def metadata(card, *, http):
         set = list(
             filter(
                 lambda x: x["name"] == set_name,
-                requests.get("https://api.scryfall.com/sets").json().get("data"),
-            )
-        )
+                requests.get("https://api.scryfall.com/sets").json().get(
+                    "data"),
+            ))
 
         cards = []
         if len(set) == 1:
             set_code = set[0]["code"]
             logger.debug("Set code is %s" % set_code)
             params = {"q": 'set:%s name:"%s"' % (set_code, name)}
-            cards = (
-                requests.get("https://api.scryfall.com/cards/search", params=params)
-                .json()
-                .get("data", [])
-            )
+            cards = (requests.get("https://api.scryfall.com/cards/search",
+                                  params=params).json().get("data", []))
 
         if len(cards) == 1:
             scryfall = cards[0]
@@ -258,34 +252,27 @@ def metadata(card, *, http):
     if scryfall and scryfall["name"] and scryfall["name"] != name:
         layout = scryfall["layout"]
         if layout == "normal":
-            logger.debug(
-                "Name mismatch %s vs %s for layout %s"
-                % (name, scryfall["name"], layout)
-            )
+            logger.debug("Name mismatch %s vs %s for layout %s" %
+                         (name, scryfall["name"], layout))
             name = scryfall["name"]
 
     if scryfall:
         if scryfall["reserved"]:
-            logger.debug(
-                "Reserved card: %s [%s]: %.2f$"
-                % (
-                    scryfall["name"],
-                    scryfall["set_name"],
-                    float(scryfall["prices"]["usd"]),
-                )
-            )
+            logger.debug("Reserved card: %s [%s]: %.2f$" % (
+                scryfall["name"],
+                scryfall["set_name"],
+                float(scryfall["prices"]["usd"]),
+            ))
         elif float(scryfall["prices"]["usd"] or 0) > 1:
-            value = float(scryfall["prices"]["usd"] or 0) * int(card.get("Total Qty"))
-            logger.debug(
-                "%s [%s] : %d x %.2f$ == %.2f$"
-                % (
-                    scryfall["name"],
-                    scryfall["set_name"],
-                    int(card.get("Total Qty")),
-                    float(scryfall["prices"]["usd"]),
-                    value,
-                )
-            )
+            value = float(scryfall["prices"]["usd"] or 0) * int(
+                card.get("Total Qty"))
+            logger.debug("%s [%s] : %d x %.2f$ == %.2f$" % (
+                scryfall["name"],
+                scryfall["set_name"],
+                int(card.get("Total Qty")),
+                float(scryfall["prices"]["usd"]),
+                value,
+            ))
     yield {**card._asdict(), "Card": name, "Mvid": mvid, "scryfall": scryfall}
 
 
@@ -353,9 +340,8 @@ def deckbox(_used_cards, row):
         total_value = (price * qty) + (foil_qty * foil_price)
         if total_value > 5:
             logger.debug(
-                "Prices from Scryfall for %s [%s] are %s/%s Total:%2.2f"
-                % (name, edition, price, foil_price, total_value)
-            )
+                "Prices from Scryfall for %s [%s] are %s/%s Total:%2.2f" %
+                (name, edition, price, foil_price, total_value))
 
     foil_cutoff = 4
 
@@ -398,9 +384,8 @@ def deckbox(_used_cards, row):
         if scryfall_set_name != None:
             if edition != scryfall_set_name:
                 mvid = row.get("Mvid")
-                logger.debug(
-                    "[mvid:%s] Set %s vs %s" % (mvid, edition, scryfall_set_name)
-                )
+                logger.debug("[mvid:%s] Set %s vs %s" %
+                             (mvid, edition, scryfall_set_name))
 
     # edition = scryfall_set_name
 
@@ -409,9 +394,8 @@ def deckbox(_used_cards, row):
             if scryfall["name"] != name:
                 if scryfall["card_faces"][0]["name"] != name:
                     logger.warning(
-                        "Card name isn't of the first face %s vs %s [%s]"
-                        % (name, scryfall["name"], scryfall["layout"])
-                    )
+                        "Card name isn't of the first face %s vs %s [%s]" %
+                        (name, scryfall["name"], scryfall["layout"]))
                     name = scryfall["card_faces"][0]["name"]
 
     if edition == 'Time Spiral ""Timeshifted""':
