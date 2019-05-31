@@ -39,7 +39,6 @@ PRICE_MODIFIER = 1.15
 MIN_PRICE = 0.25
 IN_USE_CARDS = {}
 QUALITY = ""
-LANGUAGE = "English"
 
 MTG_STUDIO = True
 DECKBOX = True
@@ -114,9 +113,37 @@ def get_graph(**options):
         _name="main",
     )
 
-    graph.add_chain(bonobo.CsvReader("main-en.csv"), _output="main")
+    graph.add_chain(bonobo.CsvReader("main-en.csv"),
+                    bonobo.Format(Language="English"),
+                    _output="main")
 
-    graph.add_chain(bonobo.CsvReader("Deckbox-extras.csv"), _output="main")
+    graph.add_chain(bonobo.CsvReader("main-de.csv"),
+                    bonobo.Format(Language="German"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("main-ru.csv"),
+                    bonobo.Format(Language="Russian"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("main-jp.csv"),
+                    bonobo.Format(Language="Japanese"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("main-fr.csv"),
+                    bonobo.Format(Language="French"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("main-kr.csv"),
+                    bonobo.Format(Language="Korean"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("main-cs.csv"),
+                    bonobo.Format(Language="Chinese"),
+                    _output="main")
+
+    graph.add_chain(bonobo.CsvReader("Deckbox-extras.csv"),
+                    bonobo.Format(Language="English"),
+                    _output="main")
 
     if ECHO_MTG:
         # Reg Qty,Foil Qty,Name,Set,Acquired,Language
@@ -425,6 +452,11 @@ def deckbox(_used_cards, row):
         price = 0
         foil_price = 0
 
+    if row.get('Language') != 'English':
+        print("XXX: %s not in English" % name)
+        trade_foil_qty = foil_qty
+        trade_qty = qty
+
     if foil_qty > 0:
         yield {
             "Count": foil_qty,
@@ -433,7 +465,7 @@ def deckbox(_used_cards, row):
             "Edition": edition,
             "Card Number": collector_number,
             "Condition": QUALITY,
-            "Language": LANGUAGE,
+            "Language": row.get('Language'),
             "Foil": "foil",
             "Signed": "",
             "Artist Proof": "",
@@ -458,7 +490,7 @@ def deckbox(_used_cards, row):
             "Edition": edition,
             "Card Number": collector_number,
             "Condition": QUALITY,
-            "Language": LANGUAGE,
+            "Language": row.get('Language'),
             "Foil": "",
             "Signed": "",
             "Artist Proof": "",

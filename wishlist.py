@@ -41,7 +41,7 @@ requests = CacheControl(req.Session(),
                         heuristic=ExpiresAfter(days=CACHE_TIME))
 
 EXTRA_SETS = (
-    "UMA",
+    #"UMA",
     #    "BFZ",
     #    "OGW",
     #    "SOI",
@@ -54,8 +54,6 @@ EXTRA_SETS = (
     # "GTC",
     # "RTR",
 )
-
-WANTS_A_LOT = []
 
 INVENTORY = {}
 
@@ -106,10 +104,7 @@ def get_cards(http):
         for wanted_card in WANTS[wanted_set]:
             wanted_count = WANTS[wanted_set][wanted_card]["count"]
             wanted_number = WANTS[wanted_set][wanted_card]["number"]
-            print("Wants %d %s from %s" %
-                  (wanted_count, wanted_card, wanted_set))
-            if wanted_card == "Plains":
-                pprint(WANTS[wanted_set][wanted_card])
+
             yield {
                 "edition_name":
                 WANTS[wanted_set][wanted_card]["wanted_edition"],
@@ -122,7 +117,8 @@ def get_cards(http):
             }
 
     for set_code, set_data in sets.items():
-        print("Finding cards out of %s" % set_code)
+        print("Finding cards out of %s [%s]" %
+              (set_code, set_map[set_code][0]))
         set_info = set_map.get(set_code)
         if not set_info:
             print("XXX: Can't find setinfo for %s %s" %
@@ -185,17 +181,6 @@ def wishlist_map(_inventory, card):
     if "legalities" in card and card["legalities"].get("standard") == "Legal":
         isStandard = True
 
-    # Skip Common/Uncommons unless isStarter and not standard
-    if name not in WANTS_A_LOT:
-        if card["rarity"] in ["common", "uncommon"]:
-            if isStandard:
-                if not isStarter:
-                    return
-
-    #            else:
-    #                # Pick only two of common/uncommons
-    #                want = 2
-
     if card["number"].endswith("★"):
         return
 
@@ -257,10 +242,6 @@ def wishlist_map(_inventory, card):
     # handle things we want more than 4 of, mostly stuff in our decks
     # XXX
 
-    if name in WANTS_A_LOT:
-        have_count = 0
-        want = 16
-
     if card.get("wanted_count", 0) > 0:
         want = card["wanted_count"]
 
@@ -295,6 +276,7 @@ def get_inventory_graph(**options):
 
     graph.add_chain(
         bonobo.CsvReader("Deckbox-inventory.csv"),
+        bonobo.Filter(lambda *args: args[-1] != 'English'),
         inventory,
         bonobo.Rename(Card_Number="Card Number",
                       Tradelist_Count="Tradelist Count"),
