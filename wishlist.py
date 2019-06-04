@@ -41,6 +41,8 @@ requests = CacheControl(req.Session(),
                         heuristic=ExpiresAfter(days=CACHE_TIME))
 
 EXTRA_SETS = (
+    "GK1",
+    "GK2",
     #"UMA",
     #    "BFZ",
     #    "OGW",
@@ -55,7 +57,7 @@ EXTRA_SETS = (
     # "RTR",
 )
 
-INVENTORY = {}
+INVENTORY = {'': {}}
 
 
 def _inventory(foo, bar):
@@ -82,6 +84,7 @@ def inventory(_inventory, count, tradelist, name, edition, number, condition,
         _inventory[edition][name] = 0
 
     _inventory[edition][name] += int(count)
+    _inventory[''][name] = _inventory[''].get(name, 0) + int(count)
 
     yield NOT_MODIFIED
 
@@ -167,6 +170,11 @@ def wishlist_map(_inventory, card):
     edition = util.edition_to_deckbox(card["edition_name"])
     set_type = card["set_type"]
 
+    trace = False
+    if card['name'] == 'XXX':
+        print("Found %s" % name)
+        trace = True
+
     want = 4
 
     # Skip Basic Lands
@@ -208,13 +216,16 @@ def wishlist_map(_inventory, card):
     if card["edition"] in set_exclusions:
         return
 
+    if trace:
+        print("Edition OK")
+
     type_exclusions = [
         "memorabilia",
         "promo",
         "starter",
         "vanguard",
         "duel_deck",
-        "box",
+        #"box",
         "funny",
         "archenemy",
         "planechase",
@@ -223,9 +234,14 @@ def wishlist_map(_inventory, card):
         "token",
     ]
 
+    if trace:
+        print("Set type %s" % set_type)
+
     if set_type in type_exclusions:
         return
 
+    if trace:
+        print("Set Type OK")
     # XXX Refactor plz
 
     if "names" in card and len(card["names"]) > 0:

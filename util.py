@@ -2,6 +2,12 @@ __all__ = ["edition_to_deckbox"]
 
 
 def edition_to_deckbox(edition):
+    if edition == "GRN Guild Kit":
+        edition = "Guilds of Ravnica Guild Kit"
+
+    if edition == "RNA Guild Kit":
+        edition = "Ravnica Allegiance Guild Kit"
+
     if edition == "Time Spiral Timeshifted":
         edition = 'Time Spiral "Timeshifted"'
 

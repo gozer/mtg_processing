@@ -452,8 +452,8 @@ def deckbox(_used_cards, row):
         price = 0
         foil_price = 0
 
+    # Non-english cards can all go
     if row.get('Language') != 'English':
-        print("XXX: %s not in English" % name)
         trade_foil_qty = foil_qty
         trade_qty = qty
 
