@@ -343,6 +343,12 @@ def deckbox(_used_cards, row):
     # XXX: Check here
     standard = is_standard(row)
 
+    trace = False
+    if name == "XXX":
+        trace = True
+        import pprint
+        pprint.pprint(row)
+
     qty = int(row.get("Reg Qty"))
     foil_qty = int(row.get("Foil Qty"))
     trade_qty = 0
@@ -370,7 +376,7 @@ def deckbox(_used_cards, row):
                 "Prices from Scryfall for %s [%s] are %s/%s Total:%2.2f" %
                 (name, edition, price, foil_price, total_value))
 
-    foil_cutoff = 4
+    foil_cutoff = 1
 
     if rarity == "Rare" or rarity == "Mythic Rare":
         qty_cutoff = 4
@@ -381,7 +387,12 @@ def deckbox(_used_cards, row):
         if qty_cutoff < 4:
             qty_cutoff = 4
         if foil_cutoff < 4:
-            foil_cutoff = 4
+            foil_cutoff = 0
+
+    # Do not care about basic lands at all
+    if scryfall and scryfall["type_line"].startswith("Basic Land"):
+        qty_cutoff = 0
+        foil_cutoff = 0
 
     # Are we using this card in our built decks ?
     if edition in _used_cards:
