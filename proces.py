@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import util
+
 import bonobo
 from bonobo.config import use, use_context, use_raw_input, use_context_processor
 from bonobo.constants import NOT_MODIFIED
@@ -453,6 +455,8 @@ def deckbox(_used_cards, row):
 
     if edition == "M19 Gift Pack":
         edition = "M19 Gift Pack Promos"
+
+    edition = util.edition_to_deckbox(edition)
 
     collector_number = 0
     if scryfall:
