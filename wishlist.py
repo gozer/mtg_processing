@@ -40,6 +40,8 @@ requests = CacheControl(req.Session(),
                         cache=CACHE,
                         heuristic=ExpiresAfter(days=CACHE_TIME))
 
+EXCLUDED_SETS = ()
+
 EXTRA_SETS = (
     "GK1",
     "GK2",
@@ -92,7 +94,13 @@ def inventory(_inventory, count, tradelist, name, edition, number, condition,
 @use("http")
 def get_cards(http):
     # sets = http.get("https://mtgjson.com/json/AllSets.json").json()
-    sets = http.get("https://mtgjson.com/json/Standard.json").json()
+
+    sets = {}
+
+    sets.update(http.get("https://mtgjson.com/json/Standard.json").json())
+
+    for excluded_set in EXCLUDED_SETS:
+        sets.pop(excluded_set, None)
 
     for extra_set in EXTRA_SETS:
         set_url = "https://mtgjson.com/json/%s.json" % extra_set
