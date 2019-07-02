@@ -40,11 +40,16 @@ requests = CacheControl(req.Session(),
                         cache=CACHE,
                         heuristic=ExpiresAfter(days=CACHE_TIME))
 
-EXCLUDED_SETS = ()
+EXCLUDED_SETS = (
+    "XLN",
+    "RIX",
+    "M19",
+    "DOM",
+)
 
 EXTRA_SETS = (
-    "GK1",
-    "GK2",
+    #    "GK1",
+    #    "GK2",
     #"UMA",
     #    "BFZ",
     #    "OGW",
