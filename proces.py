@@ -127,6 +127,10 @@ def get_graph(**options):
                     bonobo.Format(Language="Russian"),
                     _output="main")
 
+    graph.add_chain(bonobo.CsvReader("main-it.csv"),
+                    bonobo.Format(Language="Italian"),
+                    _output="main")
+
     graph.add_chain(bonobo.CsvReader("main-jp.csv"),
                     bonobo.Format(Language="Japanese"),
                     _output="main")
@@ -346,7 +350,9 @@ def deckbox(_used_cards, row):
     standard = is_standard(row)
 
     trace = False
-    if name == "XXX":
+    if name == "Yarok, the Desecrated":
+        print("Name: %s, Edition: %s, Standard: %s" %
+              (name, edition, standard))
         trace = True
         import pprint
         pprint.pprint(row)
@@ -388,7 +394,7 @@ def deckbox(_used_cards, row):
     if standard:
         if qty_cutoff < 4:
             qty_cutoff = 4
-        if foil_cutoff < 4:
+        if rarity != "Rare" and rarity != "Mythic Rare":
             foil_cutoff = 0
 
     # Do not care about basic lands at all

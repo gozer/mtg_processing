@@ -45,6 +45,9 @@ EXCLUDED_SETS = (
     "RIX",
     "M19",
     "DOM",
+    #    "RNA",
+    #    "GRN",
+    #    "WAR",
 )
 
 EXTRA_SETS = (
@@ -62,6 +65,8 @@ EXTRA_SETS = (
     # "BNG",
     # "GTC",
     # "RTR",
+    "MH1",
+    "M20",
 )
 
 INVENTORY = {'': {}}
