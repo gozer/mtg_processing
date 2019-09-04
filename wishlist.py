@@ -199,9 +199,10 @@ def wishlist_map(_inventory, card):
     if "supertypes" in card and "Basic" in card["supertypes"]:
         return
 
+    # Skip Starter Decks
     isStarter = False
     if "isStarter" in card and card["isStarter"]:
-        isStarter = True
+        return
 
     isStandard = False
     if "legalities" in card and card["legalities"].get("standard") == "Legal":
