@@ -1,18 +1,18 @@
 [tool.poetry]
 name = "mtg_processing"
-version = "0.0.1"
+version = "0.0.2"
 description = "Quick and Dirty MTG processing"
 authors = [
     "Philippe M. Chiasson <gozer@ectoplasm.org>"
 ]
-license = "MPL"
+license = "Apache-2.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-bonobo = "^0.6"
 cachecontrol = "^0.12"
 lockfile = "^0.12"
+bonobo = "^0.6"
 bonobo-sqlalchemy = "^0.6"
 PyMySQL = "^0.9.3"
 
