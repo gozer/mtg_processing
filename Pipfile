@@ -6,11 +6,8 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-bonobo = {path = "./bonobo"}
-cachecontrol = "*"
-lockfile = "*"
-bonobo-sqlalchemy = "*"
-pymysql = "*"
+poetry = "*"
+pyparsing = "*"
 
 [requires]
 python_version = "3.7"
