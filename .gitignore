@@ -1,3 +1,13 @@
+main-*.csv
+.web_cache/
+
+# Generated
+Deckbox-inventory.csv
+Deckbox-tokens.csv
+Deckbox-wishlist.csv
+DeckedBuilder.csv
+MTG-Studio.csv
+
 # Jetbrain's Products (IntelliJ, PyCharm, CLion, etc)
 .idea
 
