@@ -58,7 +58,7 @@ EXTRA_SETS = (
     # "GTC",
     # "RTR",
     'MH1',
-    'M20',
+    'ELD',
 )
 
 INVENTORY = {'': {}}
