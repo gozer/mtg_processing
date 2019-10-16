@@ -275,7 +275,11 @@ def wishlist_map(_inventory, card):
     if 'names' in card and len(card['names']) > 0:
         if name != card['names'][0]:
             return
-        if card['layout'] == 'split' or card['layout'] == 'aftermath':
+        if (
+            card['layout'] == 'split'
+            or card['layout'] == 'aftermath'
+            or card['layout'] == 'adventure'
+        ):
             name = ' // '.join(card['names'])
 
     have_count = 0

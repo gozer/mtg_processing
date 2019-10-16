@@ -227,15 +227,22 @@ def get_graph(**options):
     #    )
     #
     if DECKBOX:
+        csv_out = bonobo.CsvWriter('Deckbox-inventory.csv')
+
         graph.add_chain(
             #       # metadata,
             #        #bonobo.UnpackItems(0),
             deckbox,
             bonobo.UnpackItems(0),
-            bonobo.CsvWriter('Deckbox-inventory.csv'),
+            csv_out,
             _input=split,
         )
 
+        graph.add_chain(
+            bonobo.CsvReader('Deckbox-specials.csv'),
+            bonobo.PrettyPrinter(),
+            _output=csv_out,
+        )
     return graph
 
 
