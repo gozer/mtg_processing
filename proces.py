@@ -239,9 +239,7 @@ def get_graph(**options):
         )
 
         graph.add_chain(
-            bonobo.CsvReader('Deckbox-specials.csv'),
-            bonobo.PrettyPrinter(),
-            _output=csv_out,
+            bonobo.CsvReader('Deckbox-specials.csv'), _output=csv_out
         )
     return graph
 
@@ -260,11 +258,30 @@ def remove_metadata(card):
 def metadata(card, *, http):
     mvid = int(card.get('Mvid') or 0)
     name = card.get('Card')
+    note = card.get('Notes')
 
     scryfall = None
 
+    # Cards with a note assume a Scryfall UUID
+    if note:
+        try:
+            response = requests.get(
+                'https://api.scryfall.com/cards/%s' % note
+            ).json()
+            if response.get('object') == 'card':
+                scryfall = response
+            else:
+                logger.warning(
+                    '[mvid:%s] Invalid scyfall response %r'
+                    % (mvid, response.get('details'))
+                )
+        except Exception as e:
+            logger.warning(
+                f'[scryfall] Looking up {name!r} failed: Exception was {e!r}'
+            )
+
     # Decked Builder bug mvids are very high
-    if mvid > 0 and mvid < 1200000:
+    if mvid > 0 and mvid < 1200000 and not scryfall:
         try:
             response = requests.get(
                 'https://api.scryfall.com/cards/multiverse/%s' % mvid
@@ -315,8 +332,6 @@ def metadata(card, *, http):
                 diff = int(mvid) - scryfall['multiverse_ids'][0]
                 logger.debug('Diff is %s' % diff)
                 mvid = scryfall['multiverse_ids'][0]
-
-    # XXX: What to do with Scryfall-less cards...
 
     if scryfall and scryfall['name'] and scryfall['name'] != name:
         layout = scryfall['layout']
@@ -397,7 +412,7 @@ def deckbox(_used_cards, row):
     standard = is_standard(row)
 
     trace = False
-    if name == 'XXXX':
+    if name == 'XXX':
         print(f'Name: {name}, Edition: {edition}, Standard: {standard}')
         trace = True
 
@@ -434,7 +449,7 @@ def deckbox(_used_cards, row):
                 % (name, edition, price, foil_price, total_value)
             )
 
-    foil_cutoff = 1
+    foil_cutoff = 0
 
     if rarity == 'Rare' or rarity == 'Mythic Rare':
         qty_cutoff = 4
@@ -449,6 +464,11 @@ def deckbox(_used_cards, row):
 
     # Do not care about basic lands at all
     if scryfall and scryfall['type_line'].startswith('Basic Land'):
+        qty_cutoff = 0
+        foil_cutoff = 0
+
+    # Promos can go as well
+    if scryfall and scryfall['promo']:
         qty_cutoff = 0
         foil_cutoff = 0
 
