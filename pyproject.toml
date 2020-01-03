@@ -17,7 +17,7 @@ bonobo-sqlalchemy = "^0.6"
 PyMySQL = "^0.9.3"
 
 [tool.poetry.dev-dependencies]
-black = { version = "*", allows-prereleases = true }
+black = { version = "*", allow-prereleases = true }
 flake8 = "^3.7"
 pytest-bdd = "^3.2"
 selenium = "^3.141"
